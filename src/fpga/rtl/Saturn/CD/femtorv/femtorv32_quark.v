@@ -131,15 +131,20 @@ module FemtoRV32(
    wire aluBusy = |aluShamt; // ALU is busy if shift amount is non-zero.
    wire aluWr;               // ALU write strobe, starts shifting.
 
+   // (CDB_HLE local change 4: one adder / subtractor in place of the quark's two. aluSub is high for SUB, the
+   // set-less-than instructions and the branches, the only users of the difference, its carry (LT, LTU) and its zero
+   // test (EQ); every other user of the sum (ADD, ADDI, JALR, the load / store address) has it low.)
+   wire aluSub = isBranch | (isALU & (funct3Is[2] | funct3Is[3] | (funct3Is[0] & instr[30] & instr[5])));
+   wire [32:0] aluSum = {1'b0, aluIn1} + {1'b0, aluIn2 ^ {32{aluSub}}} + {32'd0, aluSub};
+
    // The adder is used by both arithmetic instructions and JALR.
-   wire [31:0] aluPlus = aluIn1 + aluIn2;
+   wire [31:0] aluPlus = aluSum[31:0];
 
    // Use a single 33 bits subtract to do subtraction and all comparisons
-   // (trick borrowed from swapforth/J1)
-   wire [32:0] aluMinus = {1'b1, ~aluIn2} + {1'b0,aluIn1} + 33'b1;
-   wire        LT  = (aluIn1[31] ^ aluIn2[31]) ? aluIn1[31] : aluMinus[32];
-   wire        LTU = aluMinus[32];
-   wire        EQ  = (aluMinus[31:0] == 0);
+   // (trick borrowed from swapforth/J1): the borrow is the inverted carry of the sum with the inverted operand
+   wire        LT  = (aluIn1[31] ^ aluIn2[31]) ? aluIn1[31] : ~aluSum[32];
+   wire        LTU = ~aluSum[32];
+   wire        EQ  = (aluSum[31:0] == 0);
 
    // Notes:
    // - instr[30] is 1 for SUB and 0 for ADD
@@ -148,7 +153,7 @@ module FemtoRV32(
    // - instr[30] is 1 for SRA (do sign extension) and 0 for SRL
 
    wire [31:0] aluOut =
-     (funct3Is[0]  ? instr[30] & instr[5] ? aluMinus[31:0] : aluPlus : 32'b0) |
+     (funct3Is[0]  ? aluPlus                                         : 32'b0) |
      (funct3Is[2]  ? {31'b0, LT}                                     : 32'b0) |
      (funct3Is[3]  ? {31'b0, LTU}                                    : 32'b0) |
      (funct3Is[4]  ? aluIn1 ^ aluIn2                                 : 32'b0) |

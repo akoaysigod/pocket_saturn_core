@@ -21,4 +21,8 @@ Local changes (femtorv32_quark.v, each marked "CDB_HLE local change"):
    BENCH-only initial write of x0 (x0 is never written).
 3. The load / store address adder is gone: a Store takes Simm in aluIn2 (it differs from Iimm in bits 4:0 only) and
    loadstore_addr is aluPlus; both are looked at only for a Load or a Store, where aluPlus is rs1 + Iimm / Simm as before.
+4. The quark's two 32-bit adders (aluPlus, aluMinus) are one adder / subtractor: aluSub is high for SUB, SLT / SLTU
+   (and the immediate forms) and the branches, which are the only users of the difference, its borrow (LT, LTU) and
+   its zero test (EQ); ADD, ADDI, JALR and the load / store address have it low. LT, LTU, EQ and the result are the
+   same functions of the operands as before.
 Nothing else is changed (no other line of the upstream file differs).
