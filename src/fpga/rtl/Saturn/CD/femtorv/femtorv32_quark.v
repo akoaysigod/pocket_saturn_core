@@ -121,7 +121,9 @@ module FemtoRV32(
    // Second ALU source, depends on opcode:
    //    ALUreg, Branch:     rs2
    //    ALUimm, Load, JALR: Iimm
-   wire [31:0] aluIn2 = isALUreg | isBranch ? rs2 : Iimm;
+   // (CDB_HLE local change 3: a Store takes Simm here, which only differs from Iimm in bits 4:0, so that aluPlus is also
+   // the load/store address; the other consumers of aluIn2 / aluPlus do not look at a Store)
+   wire [31:0] aluIn2 = isALUreg | isBranch ? rs2 : {Iimm[31:5], isStore ? Simm[4:0] : Iimm[4:0]};
 
    reg  [31:0] aluReg;       // The internal register of the ALU, used by shift.
    reg  [4:0]  aluShamt;     // Current shift amount.
@@ -214,8 +216,9 @@ module FemtoRV32(
 
    // A separate adder to compute the destination of load/store.
    // testing instr[5] is equivalent to testing isStore in this context.
-   wire [ADDR_WIDTH-1:0] loadstore_addr = rs1[ADDR_WIDTH-1:0] +
-		   (instr[5] ? Simm[ADDR_WIDTH-1:0] : Iimm[ADDR_WIDTH-1:0]);
+   // (CDB_HLE local change 3: no separate adder; for a Load / Store aluPlus = rs1 + Iimm / Simm is this address, and
+   // loadstore_addr is only looked at for a Load or a Store)
+   wire [ADDR_WIDTH-1:0] loadstore_addr = aluPlus[ADDR_WIDTH-1:0];
 
    /* verilator lint_off WIDTH */
    // internal address registers and cycles counter may have less than 

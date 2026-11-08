@@ -19,4 +19,6 @@ Local changes (femtorv32_quark.v, each marked "CDB_HLE local change"):
    read port that loads rs1 / rs2 in exactly the clocks the state machine loaded them; nothing writes the register
    file in those clocks, so the behaviour is cycle for cycle the original's. The RAMs start at 0, which replaces the
    BENCH-only initial write of x0 (x0 is never written).
+3. The load / store address adder is gone: a Store takes Simm in aluIn2 (it differs from Iimm in bits 4:0 only) and
+   loadstore_addr is aluPlus; both are looked at only for a Load or a Store, where aluPlus is rs1 + Iimm / Simm as before.
 Nothing else is changed (no other line of the upstream file differs).
