@@ -292,7 +292,7 @@ module VDP1 (
 	wire         TEXT_DIRY = (CMD.CMDCTRL.DIR[1] ^ DIR[1]);
 	wire         IS_PAT_EC = (CMD.CMDCTRL.COMM <= 4'h3 && !CMD.CMDPMOD.ECD && PAT.EC && !HSS_EN);
 	
-	bit  [12: 0] COL_D;
+	bit  [11: 0] COL_D;	//column counter: loaded with COL_HEIGHT, counted down; at 0 the command ends (a wrap to all ones is never read)
 	//Edge steppers. Each edge (left: A->D, right: B->C) has a column error for X and one for Y, each edge a D error. They
 	//were six Bresenham steppers E' = (E+INC >= CMP) ? E+INC-ADJ : E+INC, E0 = -H-1 (H = the ADJ/2 of the stepper). A
 	//stepper whose INC equals its ADJ (the column error of the edge's major axis: INC = 2*max(|dx|,|dy|) = ADJ; the D
