@@ -465,7 +465,7 @@ module VDP1 (
 	bit  [ 8: 0] CMD_PIX_XPOS,CMD_PIX_YPOS;
 	bit          CMD_SKIP_EN,CMD_PIX_EN,DBG_DRAW_EN;
 `endif
-	bit  [ 8: 0] CMD_DELAY;
+	bit  [ 4: 0] CMD_DELAY;	//0..23 (loaded with 10, 23, 8 or 0 and counted down to 0, where it is reloaded in the same clock)
 	bit  [ 9: 0] PENALTY_CNT;
 	
 	//+-1 steppers shared by the line vertex (draw states: NSPR/SSPR/LINE/AA_DRAW, and DRAW_X/Y while in them) and the
@@ -847,7 +847,7 @@ module VDP1 (
 								4'h7: CMD_ST <= CMDS_LINE_INIT;							
 								4'h6: CMD_ST <= CMDS_LINE_INIT;
 							endcase
-							CMD_DELAY <= 9'd8;
+							CMD_DELAY <= 5'd8;
 						end
 					end
 				end
@@ -1423,9 +1423,9 @@ module VDP1 (
 				end
 				
 				CMDS_ROW_CLIP: begin
-					CMD_DELAY <= CMD_DELAY - 9'd1;
+					CMD_DELAY <= CMD_DELAY - 5'd1;
 					if (!CMD_DELAY || PENALTY_CNT >= CMD_DELAY) begin
-						CMD_DELAY <= 9'd8;
+						CMD_DELAY <= 5'd8;
 						CMD_ST <= CMDS_ROW_DRAW;
 					end
 				end
@@ -1647,7 +1647,7 @@ module VDP1 (
 			//one adder for the three penalty updates; the later statement had priority: - CMD_DELAY, then + 1, then - 3
 			PEN_INC = ((CMD_ST == CMDS_LINE_DRAW && CMD.CMDCTRL.COMM <= 4'h3) || CMD_ST == CMDS_NSPR_DRAW || CMD_ST == CMDS_SSPR_DRAW) && PAT_PREREAD_WAIT && !CPU_VRAM_BUSY && CE_R;
 			PEN_DEC = (CMD_ST == CMDS_EXEC || CMD_ST == CMDS_ROW_CLIP) && CMD_DELAY && PENALTY_CNT >= CMD_DELAY;
-			if (PEN_SUB3 || PEN_INC || PEN_DEC) PENALTY_CNT <= PENALTY_CNT + (PEN_DEC ? ~{1'b0,CMD_DELAY} : PEN_INC ? 10'd1 : 10'h3FD) + {9'd0,PEN_DEC};
+			if (PEN_SUB3 || PEN_INC || PEN_DEC) PENALTY_CNT <= PENALTY_CNT + (PEN_DEC ? ~{5'b00000,CMD_DELAY} : PEN_INC ? 10'd1 : 10'h3FD) + {9'd0,PEN_DEC};
 		end
 	end
 	assign DRAW_WAIT = (FBD_ST != FBDS_IDLE) || CPU_VRAM_BUSY;
