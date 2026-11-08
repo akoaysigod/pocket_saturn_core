@@ -167,7 +167,17 @@ extern uint32_t mcu_lim;
 #define MCU_RUN_CAP 400
 #endif
 #define MCU_RUN_MIN 64          // the shortest cap a run may get: the longest block's D (gen_mcu.py checks)
-#define MCU_YIELD(label, pc_, D) do { if ((int32_t)(mcu_lim - (vt + (D))) < 0) { \
+// mcu_brk (smpc_world.c smpc_poll_main): a CD command waiting for the CD code stops the run here too (the same stop:
+// the block runs again from its label in a later poll)
+// (mcu_brk_p points at IO_FLAGS (hw.h: bit 0 = CMD_PEND) while the break is armed, else at a zero word: one load, one
+// dereference per yield check, 188 sites)
+extern volatile const uint32_t* mcu_brk_p;
+#ifndef CDFW_NOFIX
+#define MCU_BRK() (*mcu_brk_p & 1u)
+#else
+#define MCU_BRK() 0
+#endif
+#define MCU_YIELD(label, pc_, D) do { if ((int32_t)(mcu_lim - (vt + (D))) < 0 || MCU_BRK()) { \
 	MCU_SETPC(pc_); m.waiting = 0; m.wake_at = vt + (D); MCU_STOP_AT(label); } } while (0)
 
 // fast build: the head of an idle loop (gen_mcu.py IDLE): idle_head() returns the CE edges of the passes it skips; it

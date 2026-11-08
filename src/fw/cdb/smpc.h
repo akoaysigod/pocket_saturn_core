@@ -6,6 +6,13 @@
 
 void smpc_init(void);           // after RST_N (the CPU's reset): the MCU from its reset state
 void smpc_poll(void);           // run the MCU program up to the present when it can make progress
+// the CD main loop's poll: as smpc_poll, but it gives way to a CD command the CD code could answer now (cd_cmd_idle
+// and CMD_PEND: it stops the program at its next yield point and returns; the inner call sites, from the CD code's
+// long loops, keep the full budget). The command's answer then takes 2-3 short passes (CMD_EAT_CLOCKS(84) as before)
+// instead of waiting for the SMPC stretch (up to 0.4 ms): perf/REPORT.txt option F. CDFW_NOFIX: the old behaviour.
+void smpc_poll_main(void);
+extern bool cd_cmd_idle;        // the command coroutine is at its idle point (or in its pickup delay): a pending
+                                // command gets answered within a few short passes (cdb_hle.c)
 bool smpc_cd_released(void);    // CDRES_N (the SMPC's CD block reset) is high
 extern bool cd_running;         // the CD code runs (not held in reset)
 // the CD code's next deadline: while the drive plays, its next event (IO_TIMER ticks, 11.2896 MHz): the CD-DA queue
