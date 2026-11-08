@@ -2129,8 +2129,11 @@ module VDP2 (
 							MULYA <= ShiftToRC(Shift_t'(RPT_Q4));															//multy = My * 1
 						end
 						5'd21: begin 
-							Xp[N] <= SUMX;																			//Xp = accx + multx
-							Yp[N] <= SUMY;																			//Yp = accy + multy
+							// Xp / Yp: at step 21 SUMX / SUMY is ACC (set to a ScrnCoord value at step 17, so its FRAC is 0) plus products
+							// of a MatrParam / Shift value (six low zero bits) with ScrnCoord differences / RC_ONE (FRAC 0 or 1.0): each
+							// term is a multiple of 2^6 after the >>16 of MultRC, so bits [5:0] are 0.
+							Xp[N] <= {SUMX[31:6],6'b000000};																			//Xp = accx + multx
+							Yp[N] <= {SUMY[31:6],6'b000000};																			//Yp = accy + multy
 							SUBXA <= RC_NULL; SUBXB <= RC_NULL;												//
 							SUBYA <= RC_NULL; SUBYB <= RC_NULL;												//
 							MULXA <= RC_NULL; 																	//
