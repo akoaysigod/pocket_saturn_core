@@ -2103,6 +2103,17 @@ package VDP2_PKG;
 		return temp[47:16];
 	endfunction
 	
+	// MultRC for two operands that are multiples of 2^6 (RotCoord values built by MatrParamToRC / ShiftToRC / ScrnStartToRC /
+	// ScrnIncToRC / ScrnCoordToRC / RC_ONE / RC_NULL, and their sums and differences): the same product bits [47:16] from
+	// the 26 high bits of each operand, so a 26x26 multiplier instead of 32x32.
+	function RotCoord_t MultRC26(input RotCoord_t a, input RotCoord_t b);
+		bit signed [25:0] a6, b6;
+		bit signed [51:0] p;
+		a6 = a[31:6]; b6 = b[31:6];
+		p = a6 * b6;
+		return p[35:4];
+	endfunction
+	
 	function bit [19:1] RxPNAddr(input bit [11:0] RxOFFX, input bit [11:0] RxOFFY,
 	                             input bit [8:6] RxMP, input bit [5:0] RxMPn[16], 
 										  input bit [1:0] RxPLSZ, input bit RxCHSZ, input bit RxPNB);

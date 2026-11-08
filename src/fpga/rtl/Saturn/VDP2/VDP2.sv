@@ -2025,8 +2025,8 @@ module VDP2 (
 					if (CT_RP) CTD[1] <= CT_D;
 				end
 				
-				SUMX = $signed(ACCX) + $signed(MultRC(MULXA, ($signed(SUBXA) - $signed(SUBXB))));
-				SUMY = $signed(ACCY) + $signed(MultRC(MULYA, ($signed(SUBXA) - $signed(SUBXB))));
+				SUMX = $signed(ACCX) + $signed(MultRC26(MULXA, ($signed(SUBXA) - $signed(SUBXB))));
+				SUMY = $signed(ACCY) + $signed(MultRC26(MULYA, ($signed(SUBXA) - $signed(SUBXB))));
 				
 				ACCX <= SUMX;
 				ACCY <= SUMY;
