@@ -794,8 +794,9 @@ module SCSP (
 		bit  [ 9: 0] NEW_EVOL;
 		bit  [ 1: 0] NEW_EST;
 		bit  [10: 0] VOL_INC_BASE;
-		bit  [ 4: 0] ERMAX;
-		bit  [ 5: 0] SRAC;
+		bit  [ 1: 0] SRK;			//SRAC - 1, SRAC being the envelope step's shift (1..4)
+		bit  [10: 0] ATK_STEP;	//$signed(~{1'b0,OP4_EVOL}) >>> SRAC
+		bit  [10: 0] DEC_STEP;	//16 >> SRAC
 		bit  [ 7: 0] ND_PREV;
 		
 		if (!RST_N) begin
@@ -828,8 +829,26 @@ module SCSP (
 				endcase
 			end
 			
-			ERMAX = EFF_RATE > 5'h1E ? 5'h1E : EFF_RATE < 5'h18 ? 5'h18 : EFF_RATE;
-			SRAC = ((6'h20 - {1'b0,ERMAX}) >> 1) + (ERMAX[0] && SCNT[EFF_RATE_BIT + 1] ? 5'h1 : 5'h0);
+			// SRAC = ((32 - ERMAX) >> 1) + (ERMAX[0] && SCNT[EFF_RATE_BIT + 1]), ERMAX = EFF_RATE clamped to 24..30, is 1..4
+			// only: ERMAX 24 -> 4, 25 -> 3 (+1), 26 -> 3, 27 -> 2 (+1), 28 -> 2, 29 -> 1 (+1), 30 -> 1. ERMAX is odd only for
+			// EFF_RATE 25, 27 and 29, above 0x18, where EFF_RATE_BIT = (0x18 - 0x18)[4:1] = 0: the counter bit is SCNT[1]. So
+			// the two shifts by SRAC below are 4:1 muxes on SRK = SRAC - 1, not barrel shifters by a 5-bit amount.
+			case (EFF_RATE)
+				5'd25:   SRK = 2'd2 + {1'b0,SCNT[1]};
+				5'd26:   SRK = 2'd2;
+				5'd27:   SRK = 2'd1 + {1'b0,SCNT[1]};
+				5'd28:   SRK = 2'd1;
+				5'd29:   SRK = {1'b0,SCNT[1]};
+				5'd30,
+				5'd31:   SRK = 2'd0;
+				default: SRK = 2'd3;
+			endcase
+			case (SRK)
+				2'd0: begin ATK_STEP = {2'b11,~OP4_EVOL[9:1]};          DEC_STEP = 11'd8; end
+				2'd1: begin ATK_STEP = {3'b111,~OP4_EVOL[9:2]};         DEC_STEP = 11'd4; end
+				2'd2: begin ATK_STEP = {4'b1111,~OP4_EVOL[9:3]};        DEC_STEP = 11'd2; end
+				2'd3: begin ATK_STEP = {5'b11111,~OP4_EVOL[9:4]};        DEC_STEP = 11'd1; end
+			endcase
 `ifdef DEBUG
 			if (CYCLE1_CE) begin
 				DECAY1_DBG <= 0;
@@ -844,8 +863,7 @@ module SCSP (
 				
 				// ATTACK_VOL_CALC (attack state) and DECAY_VOL_CALC (the other states) through one adder
 				VOL_CALC = {1'b0,OP4_EVOL} + (!ENV_STEP ? 11'd0 :
-				                              OP4_EST == EST_ATTACK ? $signed($signed(~{1'b0,OP4_EVOL}) >>> SRAC[4:0]) :
-				                                                      {1'b0,$signed(10'd16 >>> SRAC[4:0])});
+				                              OP4_EST == EST_ATTACK ? ATK_STEP : DEC_STEP);
 				if (OP4.RST) begin
 					NEW_EVOL = 10'h3FF;
 					NEW_EST = EST_RELEASE;
