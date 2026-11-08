@@ -539,7 +539,7 @@ module SH_core_cs
 	// the interrupt one), is left out and ORed in in the EX clock (VECT_IN / VECT_SH, SH_core's placement).
 	typedef struct packed {
 		bit [31:0] REG_A, REG_B, ALU_A, ALU_B;
-		bit        VA, VB;		//ALU_A / ALU_B is the VECT immediate
+		bit        VA;			//ALU_A is the VECT immediate (no decoder row has ALU_B = the VECT immediate)
 	} ExOp_t;
 	ExOp_t EXOP_N, EXOP;
 	always_comb begin
@@ -709,7 +709,6 @@ module SH_core_cs
 		EXOP_N.ALU_A = PIPE_1.EX.DI.ALU.SA ? rc : ra;
 		EXOP_N.ALU_B = PIPE_1.EX.DI.ALU.SB ? rc : rb;
 		EXOP_N.VA = PIPE_1.EX.DI.ALU.SA & PIPE_1.EX.DI.DP.RSC & (PIPE_1.EX.DI.IMMT == VECT);
-		EXOP_N.VB = PIPE_1.EX.DI.ALU.SB & PIPE_1.EX.DI.DP.RSC & (PIPE_1.EX.DI.IMMT == VECT);
 		if (!o_RES_N) EXOP_N = '0;
 	end
 	always @(posedge CLK or negedge RST_N) begin
@@ -743,7 +742,7 @@ module SH_core_cs
 		bit [31:0] log_b;
 
 		ALU_A = EXOP.ALU_A | {22'h000000, VECT_SH & {10{EXOP.VA}}};
-		ALU_B = EXOP.ALU_B | {22'h000000, VECT_SH & {10{EXOP.VB}}};
+		ALU_B = EXOP.ALU_B;
 
 		adder_a = PIPE.EX.DI.ALU.OP == DIV ? {ALU_A[30:0],SR.T} : ALU_A;
 		adder_code = PIPE.EX.DI.ALU.OP == DIV ? {3'b000,(SR.M ~^ SR.Q)} : PIPE.EX.DI.ALU.CD;
