@@ -365,29 +365,24 @@ package VDP1_PKG;
 	function bit [15:0] ColorCalc(input bit [15:0] ORIG, input bit [15:0] BACK, input bit [14:0] CG, input bit [2:0] CCB);
 		RGB_t      GOUR;
 		RGB_t      ORIG_HALF,ORIG_ONE;
-		RGB_t      GOUR_HALF,GOUR_ONE;
 		RGB_t      BACK_HALF,BACK_ONE;
 		RGB_t      A,B,S;
 		bit        MSB;
 		
 		GOUR = GouraudAdd(ORIG[14:0],CG);
 		
-		ORIG_HALF = ColorHalf(ORIG[14:0]);
-		ORIG_ONE = ORIG[14:0];
-		GOUR_HALF = ColorHalf(GOUR);
-		GOUR_ONE = GOUR;
+		//CCB[2] selects the gouraud-shaded colour as the source colour (ORIG_ONE); its half and the sums below are then
+		//the same for both, so the source colour is selected once instead of once per CCB value
+		ORIG_ONE = CCB[2] ? GOUR : ORIG[14:0];
+		ORIG_HALF = ColorHalf(ORIG_ONE);
 		BACK_HALF = ColorHalf(BACK[14:0]);
 		BACK_ONE = BACK[14:0];
 		
-		case (CCB)
-			3'b000: begin A = ORIG_ONE;                        B = '0;                              MSB =            ORIG[15]; end
-			3'b001: begin A = '0;                              B = BACK[15] ? BACK_HALF : BACK_ONE; MSB = BACK[15];            end
-			3'b010: begin A = ORIG_HALF;                       B = '0;                              MSB =            ORIG[15]; end
-			3'b011: begin A = BACK[15] ? ORIG_HALF : ORIG_ONE; B = BACK[15] ? BACK_HALF : '0;       MSB = BACK[15] | ORIG[15]; end
-			3'b100: begin A = GOUR_ONE;                        B = '0;                              MSB =            ORIG[15]; end
-			3'b101: begin A = '0;                              B = BACK_ONE;                        MSB = BACK[15];            end
-			3'b110: begin A = GOUR_HALF;                       B = '0;                              MSB =            ORIG[15]; end
-			3'b111: begin A = BACK[15] ? GOUR_HALF : GOUR_ONE; B = BACK[15] ? BACK_HALF : '0;       MSB = BACK[15] | ORIG[15]; end
+		case (CCB[1:0])
+			2'b00: begin A = ORIG_ONE;                        B = '0;                              MSB =            ORIG[15]; end
+			2'b01: begin A = '0;                              B = (BACK[15] & ~CCB[2]) ? BACK_HALF : BACK_ONE; MSB = BACK[15];            end
+			2'b10: begin A = ORIG_HALF;                       B = '0;                              MSB =            ORIG[15]; end
+			2'b11: begin A = BACK[15] ? ORIG_HALF : ORIG_ONE; B = BACK[15] ? BACK_HALF : '0;       MSB = BACK[15] | ORIG[15]; end
 		endcase
 		S = ColorAdd(A,B);
 		
