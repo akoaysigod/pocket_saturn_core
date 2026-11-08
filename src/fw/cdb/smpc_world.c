@@ -21,6 +21,7 @@
 #define S_OREG      SIO(21)      // {index [12:8], byte}
 
 static inline int wt_lt(uint32_t a, uint32_t b) { return (int32_t)(a - b) < 0; }
+static const uint32_t mcu_brk_zero;      // (smpc_poll_main: MCU_YIELD's break word while no CD command can break a run)
 
 static uint32_t now;             // the inputs are known up to this edge
 static uint32_t now24;
@@ -101,6 +102,7 @@ static void refresh(void)
 
 void smpc_init(void)
 {
+	mcu_brk_p = &mcu_brk_zero;
 	P.t0 = 0;
 	now = 0; now24 = 0;
 	vbl_n = 1; vbl_e[0] = 0; vbl_v[0] = 1; vbl_seen_v = 1;   // SMPC_FW after RST_N: IRQV_N 1 (from edge 0)
@@ -137,6 +139,22 @@ void smpc_poll(void)
 	if (in_poll) return;                         // memset / memcpy poll too: not from inside the SMPC code
 	poll_run();
 }
+// the CD main loop's poll (smpc.h): a pending CD command the CD code could answer now (cd_cmd_idle) ends the poll at
+// the program's next yield point (mcu_brk: MCU_YIELD looks at CMD_PEND then). Only while the CD code runs.
+bool cd_cmd_idle;
+volatile const uint32_t* mcu_brk_p;             // (set in smpc_init: no initialised .data in this image)
+#ifndef CDFW_NOFIX
+static inline bool cd_cmd_waits(void) { return cd_cmd_idle && (IO_FLAGS & F_CMD_PEND); }
+#else
+static inline bool cd_cmd_waits(void) { return false; }
+#endif
+void smpc_poll_main(void)
+{
+	if (cd_cmd_waits()) return;
+	if (cd_running && cd_cmd_idle) mcu_brk_p = &IO_FLAGS;
+	smpc_poll();
+	mcu_brk_p = &mcu_brk_zero;
+}
 static void poll_run(void)
 {
 	in_poll = true;
@@ -161,6 +179,7 @@ static void poll_run(void)
 		mcu_exec();
 		refresh();
 		if ((int32_t)(now - start) >= POLL_BUDGET) break;
+		if (mcu_brk_p != &mcu_brk_zero && cd_cmd_waits()) break;   // (smpc_poll_main: a CD command waits; the run stopped at a yield point)
 	}
 	// the next poll that has something to do: at the program's wake-up edge (now if it can run; at most 2^22 edges on,
 	// for the 24-bit compare), or at an input event

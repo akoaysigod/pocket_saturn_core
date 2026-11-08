@@ -145,8 +145,12 @@
 #ifdef SMPC_FW
 #include "smpc.h"
 #define SMPC_POLL() smpc_poll()     // the SMPC's MCU program, run up to the present (fw: smpc_world.c)
+#define SMPC_POLL_MAIN() smpc_poll_main()   // the main loop's poll: gives way to a command the coroutine can answer
+#define CMD_IDLE_SET(v) (cd_cmd_idle = (v))
 #else
 #define SMPC_POLL() ((void)0)
+#define SMPC_POLL_MAIN() ((void)0)
+#define CMD_IDLE_SET(v) ((void)0)
 #endif
 
 static void CheckBufPauseResume(void);
@@ -280,6 +284,12 @@ static INLINE void SetResults(uint16_t r0, uint16_t r1, uint16_t r2, uint16_t r3
 }
 static uint16_t SWResetHIRQDeferred;
 static bool SWResetPending;
+#if defined(SMPC_FW) && !defined(CDFW_NOFIX)
+static bool CmdPickupEat;	// the command coroutine waits out its 84-clock pickup delay (CMD_EAT_CLOCKS after reading CR)
+#define CMD_PICKUP_EAT(v) (CmdPickupEat = (v))
+#else
+#define CMD_PICKUP_EAT(v) ((void)0)	// (plain image, CDFW_NOFIX: byte-identical to before)
+#endif
 static uint8_t ResetSelPending;
 
 static uint8_t CDDevConn;
@@ -2352,6 +2362,7 @@ static void CDB_Run(int32_t clocks)
      }
      else
      {
+      CMD_IDLE_SET(true);	// (SMPC_FW: a command arriving now is answered after short passes, smpc.h cd_cmd_idle)
       CMD_YIELD;
      }
     }
@@ -2363,7 +2374,10 @@ static void CDB_Run(int32_t clocks)
     CTR.Command = CTR.CD[0] >> 8;
     //
     //
+    CMD_PICKUP_EAT(true);	// (the main loop spins these 84 clocks out and runs CDB_Run again at once, cd_main)
     CMD_EAT_CLOCKS(84); //90);
+    CMD_PICKUP_EAT(false);
+    CMD_IDLE_SET(false);	// (from here a command may take its modelled time: the SMPC polls as before)
 
     if(FLS.Active && FLS.DoAuth)
     {
@@ -3846,6 +3860,7 @@ int main(void)
  uint32_t last;
  bool disc;
 
+ CMD_IDLE_SET(false);		// (the flag lives with the SMPC code: not in the CD code's .bss, cleared here)
  CDB_Reset(true);
 #ifdef CD_SRC_FW
  src_init();			// CD_SRC_FW: the disc comes in (DISC_IN) once the data slots are scanned
@@ -3856,7 +3871,7 @@ int main(void)
 
  for(;;)
  {
-  SMPC_POLL();
+  SMPC_POLL_MAIN();
 #ifdef CD_SRC_FW
   src_poll();
 #endif
@@ -3870,6 +3885,18 @@ int main(void)
   }
   CDB_Run((int32_t)(now - last));
   last = now;
+#if defined(SMPC_FW) && !defined(CDFW_NOFIX)
+  // A command just picked up waits CMD_EAT_CLOCKS(84) = 7.4 us before its answer: wait them out here and run CDB_Run
+  // again at once (the same clocks for the drive; no SMPC / source poll in between, they come every ~25 us anyway)
+  // instead of giving the answer a whole pass later. (CommandClockCounter is -84 .. -1 then.)
+  if(CmdPickupEat)
+  {
+   uint32_t t;
+   while((int32_t)((t = IO_TIMER) - last) + CommandClockCounter < 0) { }
+   CDB_Run((int32_t)(t - last));
+   last = t;
+  }
+#endif
 #ifdef SMPC_FW
   smpc_cd_deadline = now + (uint32_t)DriveCounter;
   smpc_cd_deadline_on = DrivePhase == DRIVEPHASE_PLAY && DriveCounter > 0;
