@@ -737,18 +737,14 @@ module SCSP (
 	bit  [ 9: 0] OP4_EVOL;	//Current envelope volume
 	EGState_t    OP4_EST;	//Current envelope state
 	bit  [14: 0] SCNT;		//Sample counter
-	bit  [14: 0] SCNT_PREV;
 	always @(posedge CLK or negedge RST_N) begin
 		if (!RST_N) begin
 			SCNT <= '0;
-			SCNT_PREV <= '1;
 		end else if (!RES_N) begin
 			SCNT <= '0;
-			SCNT_PREV <= '1;
 		end else begin
 			if (SLOT1_CE) begin
 				if (OP4.SLOT == 5'd31) begin
-					SCNT_PREV <= SCNT;
 					SCNT <= SCNT + 1'd1;
 				end
 			end
@@ -763,7 +759,9 @@ module SCSP (
 		bit  [ 4: 0] RATE;
 		bit  [14: 0] SCNT_EDGE;
 		
-		SCNT_EDGE = (SCNT ^ SCNT_PREV) & (SCNT ^ 15'h0001);
+		// SCNT_PREV was the value SCNT had before its last increment (reset: all ones, SCNT 0), i.e. always SCNT - 1
+		// (mod 2^15): SCNT ^ (SCNT - 1) has bit i set iff SCNT[i-1:0] = 0, so no register is needed for it
+		for (int i = 0; i < 15; i++) SCNT_EDGE[i] = (i == 0 ? ~SCNT[0] : (SCNT[i] & ~|(SCNT & ((15'h0001 << i) - 15'h0001))));
 		
 		case (OP4_EST)
 			EST_ATTACK: RATE = OP4_SCR1.AR;	
