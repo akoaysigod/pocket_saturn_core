@@ -466,10 +466,12 @@ module SH_core_cs
 	wire       DR_BC = (BR_T == ~DEC_IR[9]);
 	wire [4:0] DR_RAN = R.RASEL ? {1'b0, DEC_IR[11:8]} : {R.RAC[1], {4{R.RAC[0]}}};
 	wire [4:0] DR_RBN = R.RBSEL[0] ? {1'b0, DEC_IR[7:4]} : R.RBSEL[1] ? {1'b0, DEC_IR[11:8]} : {R.RBC[1], {4{R.RBC[0]}}};
+	// R.SRS[2] and R.VECR are the same column of the decoder ROM (identical in all 1024 rows), so the decoded SRS[2] is
+	// taken from R.VECR: one pipeline bit (EX.CTRL.SRS[2] = EX.VECR) and one ROM output less.
 	assign ID_DECI = DecInstr_t'({3'b000, R.RSB, R.RSC, R.PCM, R.BPWBA, R.BPLDA, R.BPMAB, R.IMMT,
 	                              R.SA, R.SB, R.OP, R.CD, R.CMP, R.ADDS, R.WDS, R.SZ, R.MR, R.MW, R.DF,
 	                              DR_RAN, R.RAR, R.RAW, DR_RBN, R.RBR, R.RBW, R.R0R, R.PCW | (R.CB0 & DR_BC),
-	                              R.CW, R.CS, R.SRS, R.MACS, R.MACR, R.MACW, R.MACOP,
+	                              R.CW, R.CS, {R.VECR, R.SRS[1:0]}, R.MACS, R.MACR, R.MACW, R.MACOP,
 	                              R.BI, R.BT, R.BD, R.BCV, R.BSR, R.TAS, R.SLP, R.IBI, R.IID, R.LST | {2'b00, R.CB0 & DR_BC}, R.VECR, R.ILI});
 
 	wire [ 2: 0] NEXT_STATE = STATE == ID_DECI.LST ? 3'd0 : STATE + 3'd1;
