@@ -1656,7 +1656,11 @@ module VDP1 (
 	assign DBG_PENALTY_OVER = (PENALTY_CNT >= 10'd256);
 `endif
 
-	assign SPR_ADDR = CMD.CMDCTRL.COMM >= 4'h4 ? '1 : SprAddr(SPR_OFFSY, CMD.CMDSRCA, CMD.CMDPMOD.CM);
+	//(SPR_ADDR is only used for the pattern read, PAT_ADDR, which needs SPR_READ. SPR_READ is set only in SSPR_CALCTX (normal /
+	//scaled sprite) and LINE_CALCTX (distorted sprite: ~COMM[2]), and cleared in LINE_NEXT before the command ends, while CMD
+	//changes only in a command read after that, or after FRAME_START / DRAW_TERMINATE clear it: so COMM < 4 whenever it is used,
+	//and the address of a polygon / line command ('1) is never read)
+	assign SPR_ADDR = SprAddr(SPR_OFFSY, CMD.CMDSRCA, CMD.CMDPMOD.CM);
 	assign CLT_ADDR = {CMD.CMDCOLR[15:2],2'b00,2'b00};
 	assign GRD_ADDR = {CMD.CMDGRDA,2'b00};
 	
