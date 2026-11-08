@@ -717,8 +717,9 @@ module SH_core_cs
 	end
 
 	wire [ 7: 0] VECT_IN = RES_EXP ? {6'b000000,~NMI_N,1'b0} : INT_REQ_LATCH ? INT_VEC : 8'h00;
-	wire [ 9: 0] VECT_SH = PIPE.EX.DI.BR.BI || PIPE.EX.DI.MEM.SZ == 2'b01 ? {1'b0,VECT_IN,1'b0} :
-	                       PIPE.EX.DI.MEM.SZ == 2'b00 ? {2'b00,VECT_IN} : {VECT_IN,2'b00};
+	// SH_core shifts the vector number by the immediate's scale (BI / SZ); the four decoder rows with the VECT immediate
+	// (330, 340, 347, 355) all have BI = 0 and SZ = 2, so it is {VECT_IN,2'b00} whenever it is used (EXOP.VA)
+	wire [ 9: 0] VECT_SH = {VECT_IN,2'b00};
 	wire [31: 0] REG_A = EXOP.REG_A;
 	wire [31: 0] REG_B = EXOP.REG_B;
 
