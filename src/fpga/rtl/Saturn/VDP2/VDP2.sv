@@ -1892,7 +1892,10 @@ module VDP2 (
 	wire        RPS_NC = ~VA_PIPE[2].RP_POS[7];
 	wire [ 2:0] RPS_RW = (RPS_SC == 5'd4 || RPS_SC == 5'd14) ? {2'd0,RPS_NC} : (RPS_SC == 5'd5 || RPS_SC == 5'd15) ? {2'd1,RPS_NC} : {2'd2,RPS_NC};
 	wire        RPS_STEP = DOT_CE_R && (VA_PIPE[2].RPA || VA_PIPE[2].RPB);
-	wire [31:0] RPS_XY = RPS_V[RPS_RW[1:0]] ? RPS_Q[31:0] : 32'h00000000;
+	// Xst / Yst are sums of ScrnStartToRC / ScrnIncToRC values, which end in six zero bits (their FRAC field is shifted
+	// left by 6): every word written into RPS_RAM for them has bits [5:0] = 0, so those bits are read as 0 here and
+	// synthesis can drop them (the RAM cannot tell it).
+	wire [31:0] RPS_XY = RPS_V[RPS_RW[1:0]] ? {RPS_Q[31:6],6'b000000} : 32'h00000000;
 	wire [31:0] RPS_XY_NEW = IS_LAST_LINE ? ScrnStartToRC(ScrnStart_t'(RPT_Q2)) : $signed(RPS_XY) + $signed(ScrnIncToRC(ScrnInc_t'(RPT_Q1)));
 `ifdef FRESH_VDP2_KA
 	wire [34:0] RPS_KAY_NEW = IS_LAST_LINE ? 35'd0 : $signed(RPS_Q) + $signed(AddrIncToRA(AddrInc_t'(RPT_Q4)));
