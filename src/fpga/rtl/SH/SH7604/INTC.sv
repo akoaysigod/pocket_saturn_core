@@ -143,24 +143,33 @@ module SH7604_INTC
 		end
 	end
 	
+	// The IRL level is taken when the last five IRL_N samples (the current one and the four before) are equal. Those four
+	// earlier samples were a shift register; only whether they are all equal to the newest of them matters, so the
+	// newest (IRL_S) and the length of the run of equal samples ending with it, capped at 4 (IRL_RUN), are kept instead:
+	// the five are equal iff the new sample equals IRL_S and IRL_RUN is 4. Reset: four samples of 1111, a run of 4.
 	always @(posedge CLK or negedge RST_N) begin
-		bit [3:0] IRL_OLD[4];
+		bit [3:0] IRL_S;
+		bit [2:0] IRL_RUN;
 		bit [3:0] IRL_NORM;
 		
 		if (!RST_N) begin
-			IRL_OLD <= '{4{'1}};
+			IRL_S <= 4'hF;
+			IRL_RUN <= 3'd4;
 			IRL_NORM <= '0;
 		end
 		else if (!RES_N) begin	
-			IRL_OLD <= '{4{'1}};
+			IRL_S <= 4'hF;
+			IRL_RUN <= 3'd4;
 			IRL_NORM <= '0;
 		end
 		else if (EN && CE_R) begin	
-			IRL_OLD[0] <= ~IRL_N;
-			IRL_OLD[1] <= IRL_OLD[0];
-			IRL_OLD[2] <= IRL_OLD[1];
-			IRL_OLD[3] <= IRL_OLD[2];
-			if (IRL_OLD[0] == ~IRL_N && IRL_OLD[1] == ~IRL_N && IRL_OLD[2] == ~IRL_N && IRL_OLD[3] == ~IRL_N) begin
+			IRL_S <= ~IRL_N;
+			if (IRL_S == ~IRL_N) begin
+				if (IRL_RUN != 3'd4) IRL_RUN <= IRL_RUN + 3'd1;
+			end else begin
+				IRL_RUN <= 3'd1;
+			end
+			if (IRL_S == ~IRL_N && IRL_RUN == 3'd4) begin
 				IRL_LVL <= ~IRL_N;
 				IRL_NORM <= ~IRL_N;
 			end else begin
