@@ -1209,50 +1209,54 @@ module VDP2 (
 			             (NSxREG[g].BMEN || (VA_PIPE[2].NxPN_FETCH[g] && NxPN_CYC[g]));
 		end
 	end
+	// The layer of a bank's NBG access (NBG_xxVA.Nx, the priority-encoded layer of whichever VA_PIPE[0] flag of that bank is set) is
+	// the low two bits of the bank's VCP code (VCPxx: N0PN..N3PN = 0..3, N0CH..N3CH = 4..7): the flags of one bank compare the same
+	// code, so at most one is set and its layer is VCPxx[1:0]. Where a per-layer flag [i] qualifies the term, the layer is i.
+	// Every use below is qualified by such a flag (PN / CH), so the select is the same where it matters.
 	// bank A0: at most one NBG access (one VCP code) and NBG/RBG are exclusive (RDBSx / R0ON / R1ON);
 	// RBG accesses keep the original priority (CT over CH over PN: the later assignment won)
-	wire A0_NPN = NBG_A0VA.PN && NxPN_ADDR[NBG_A0VA.Nx][18:17] == 2'b00;
-	wire A0_NCH = NBG_A0VA.CH && NxCH_ADDR[NBG_A0VA.Nx][18:17] == 2'b00 && ((VA_PIPE[2].NxPN_FETCH[NBG_A0VA.Nx] && NxPN_CYC[NBG_A0VA.Nx]) || NSxREG[NBG_A0VA.Nx].BMEN);
+	wire A0_NPN = NBG_A0VA.PN && NxPN_ADDR[VCPA0[1:0]][18:17] == 2'b00;
+	wire A0_NCH = NBG_A0VA.CH && NxCH_ADDR[VCPA0[1:0]][18:17] == 2'b00 && ((VA_PIPE[2].NxPN_FETCH[VCPA0[1:0]] && NxPN_CYC[VCPA0[1:0]]) || NSxREG[VCPA0[1:0]].BMEN);
 	wire A0_NVS = NBG_A0VA.VS && NxVS_ADDR[18:17] == 2'b00;
 	wire A0_RPN = RBG_A0VA.PN && RxPN_ADDR[RBG_A0VA.Rx][18:17] == 2'b00;
 	wire A0_RCH = RBG_A0VA.CH && RxCH_ADDR[RBG_A0VA.Rx][18:17] == 2'b00;
 	wire A0_RCT = RBG_A0VA.CT && RxCT_ADDR[RBG_A0VA.Rx][18:17] == 2'b00;
 	wire A0_HIT = A0_NPN | A0_NCH | A0_NVS | A0_RPN | A0_RCH | A0_RCT;
 	wire [19:1] A0_DADDR = A0_RCT ? RxCT_ADDR[RBG_A0VA.Rx] : A0_RCH ? RxCH_ADDR[RBG_A0VA.Rx] : A0_RPN ? RxPN_ADDR[RBG_A0VA.Rx] :
-	                        ({19{A0_NPN}} & NxPN_ADDR[NBG_A0VA.Nx]) | ({19{A0_NCH}} & NxCH_ADDR[NBG_A0VA.Nx]) | ({19{A0_NVS}} & NxVS_ADDR);
+	                        ({19{A0_NPN}} & NxPN_ADDR[VCPA0[1:0]]) | ({19{A0_NCH}} & NxCH_ADDR[VCPA0[1:0]]) | ({19{A0_NVS}} & NxVS_ADDR);
 	// bank A1: at most one NBG access (one VCP code) and NBG/RBG are exclusive (RDBSx / R0ON / R1ON);
 	// RBG accesses keep the original priority (CT over CH over PN: the later assignment won)
-	wire A1_NPN = NBG_A1VA.PN && NxPN_ADDR[NBG_A1VA.Nx][18:17] == 2'b01;
-	wire A1_NCH = NBG_A1VA.CH && NxCH_ADDR[NBG_A1VA.Nx][18:17] == 2'b01 && ((VA_PIPE[2].NxPN_FETCH[NBG_A1VA.Nx] && NxPN_CYC[NBG_A1VA.Nx]) || NSxREG[NBG_A1VA.Nx].BMEN);
+	wire A1_NPN = NBG_A1VA.PN && NxPN_ADDR[VCPA1[1:0]][18:17] == 2'b01;
+	wire A1_NCH = NBG_A1VA.CH && NxCH_ADDR[VCPA1[1:0]][18:17] == 2'b01 && ((VA_PIPE[2].NxPN_FETCH[VCPA1[1:0]] && NxPN_CYC[VCPA1[1:0]]) || NSxREG[VCPA1[1:0]].BMEN);
 	wire A1_NVS = NBG_A1VA.VS && NxVS_ADDR[18:17] == 2'b01;
 	wire A1_RPN = RBG_A1VA.PN && RxPN_ADDR[RBG_A1VA.Rx][18:17] == 2'b01;
 	wire A1_RCH = RBG_A1VA.CH && RxCH_ADDR[RBG_A1VA.Rx][18:17] == 2'b01;
 	wire A1_RCT = RBG_A1VA.CT && RxCT_ADDR[RBG_A1VA.Rx][18:17] == 2'b01;
 	wire A1_HIT = A1_NPN | A1_NCH | A1_NVS | A1_RPN | A1_RCH | A1_RCT;
 	wire [19:1] A1_DADDR = A1_RCT ? RxCT_ADDR[RBG_A1VA.Rx] : A1_RCH ? RxCH_ADDR[RBG_A1VA.Rx] : A1_RPN ? RxPN_ADDR[RBG_A1VA.Rx] :
-	                        ({19{A1_NPN}} & NxPN_ADDR[NBG_A1VA.Nx]) | ({19{A1_NCH}} & NxCH_ADDR[NBG_A1VA.Nx]) | ({19{A1_NVS}} & NxVS_ADDR);
+	                        ({19{A1_NPN}} & NxPN_ADDR[VCPA1[1:0]]) | ({19{A1_NCH}} & NxCH_ADDR[VCPA1[1:0]]) | ({19{A1_NVS}} & NxVS_ADDR);
 	// bank B0: at most one NBG access (one VCP code) and NBG/RBG are exclusive (RDBSx / R0ON / R1ON);
 	// RBG accesses keep the original priority (CT over CH over PN: the later assignment won)
-	wire B0_NPN = NBG_B0VA.PN && NxPN_ADDR[NBG_B0VA.Nx][18:17] == 2'b10;
-	wire B0_NCH = NBG_B0VA.CH && NxCH_ADDR[NBG_B0VA.Nx][18:17] == 2'b10 && ((VA_PIPE[2].NxPN_FETCH[NBG_B0VA.Nx] && NxPN_CYC[NBG_B0VA.Nx]) || NSxREG[NBG_B0VA.Nx].BMEN);
+	wire B0_NPN = NBG_B0VA.PN && NxPN_ADDR[VCPB0[1:0]][18:17] == 2'b10;
+	wire B0_NCH = NBG_B0VA.CH && NxCH_ADDR[VCPB0[1:0]][18:17] == 2'b10 && ((VA_PIPE[2].NxPN_FETCH[VCPB0[1:0]] && NxPN_CYC[VCPB0[1:0]]) || NSxREG[VCPB0[1:0]].BMEN);
 	wire B0_NVS = NBG_B0VA.VS && NxVS_ADDR[18:17] == 2'b10;
 	wire B0_RPN = RBG_B0VA.PN && RxPN_ADDR[RBG_B0VA.Rx][18:17] == 2'b10;
 	wire B0_RCH = RBG_B0VA.CH && RxCH_ADDR[RBG_B0VA.Rx][18:17] == 2'b10;
 	wire B0_RCT = RBG_B0VA.CT && RxCT_ADDR[RBG_B0VA.Rx][18:17] == 2'b10;
 	wire B0_HIT = B0_NPN | B0_NCH | B0_NVS | B0_RPN | B0_RCH | B0_RCT;
 	wire [19:1] B0_DADDR = B0_RCT ? RxCT_ADDR[RBG_B0VA.Rx] : B0_RCH ? RxCH_ADDR[RBG_B0VA.Rx] : B0_RPN ? RxPN_ADDR[RBG_B0VA.Rx] :
-	                        ({19{B0_NPN}} & NxPN_ADDR[NBG_B0VA.Nx]) | ({19{B0_NCH}} & NxCH_ADDR[NBG_B0VA.Nx]) | ({19{B0_NVS}} & NxVS_ADDR);
+	                        ({19{B0_NPN}} & NxPN_ADDR[VCPB0[1:0]]) | ({19{B0_NCH}} & NxCH_ADDR[VCPB0[1:0]]) | ({19{B0_NVS}} & NxVS_ADDR);
 	// bank B1: at most one NBG access (one VCP code) and NBG/RBG are exclusive (RDBSx / R0ON / R1ON);
 	// RBG accesses keep the original priority (CT over CH over PN: the later assignment won)
-	wire B1_NPN = NBG_B1VA.PN && NxPN_ADDR[NBG_B1VA.Nx][18:17] == 2'b11;
-	wire B1_NCH = NBG_B1VA.CH && NxCH_ADDR[NBG_B1VA.Nx][18:17] == 2'b11 && ((VA_PIPE[2].NxPN_FETCH[NBG_B1VA.Nx] && NxPN_CYC[NBG_B1VA.Nx]) || NSxREG[NBG_B1VA.Nx].BMEN);
+	wire B1_NPN = NBG_B1VA.PN && NxPN_ADDR[VCPB1[1:0]][18:17] == 2'b11;
+	wire B1_NCH = NBG_B1VA.CH && NxCH_ADDR[VCPB1[1:0]][18:17] == 2'b11 && ((VA_PIPE[2].NxPN_FETCH[VCPB1[1:0]] && NxPN_CYC[VCPB1[1:0]]) || NSxREG[VCPB1[1:0]].BMEN);
 	wire B1_NVS = NBG_B1VA.VS && NxVS_ADDR[18:17] == 2'b11;
 	wire B1_RPN = RBG_B1VA.PN && RxPN_ADDR[RBG_B1VA.Rx][18:17] == 2'b11;
 	wire B1_RCH = RBG_B1VA.CH && RxCH_ADDR[RBG_B1VA.Rx][18:17] == 2'b11;
 	wire B1_RCT = RBG_B1VA.CT && RxCT_ADDR[RBG_B1VA.Rx][18:17] == 2'b11;
 	wire B1_HIT = B1_NPN | B1_NCH | B1_NVS | B1_RPN | B1_RCH | B1_RCT;
 	wire [19:1] B1_DADDR = B1_RCT ? RxCT_ADDR[RBG_B1VA.Rx] : B1_RCH ? RxCH_ADDR[RBG_B1VA.Rx] : B1_RPN ? RxPN_ADDR[RBG_B1VA.Rx] :
-	                        ({19{B1_NPN}} & NxPN_ADDR[NBG_B1VA.Nx]) | ({19{B1_NCH}} & NxCH_ADDR[NBG_B1VA.Nx]) | ({19{B1_NVS}} & NxVS_ADDR);
+	                        ({19{B1_NPN}} & NxPN_ADDR[VCPB1[1:0]]) | ({19{B1_NCH}} & NxCH_ADDR[VCPB1[1:0]]) | ({19{B1_NVS}} & NxVS_ADDR);
 	always @(posedge CLK or negedge RST_N) begin
 		bit DTEN_N_OLD,CS_N_OLD;
 		bit VRAMA_ALLOW,VRAMB_ALLOW;
@@ -2571,9 +2575,9 @@ module VDP2 (
 	always_comb begin
 		for (int i = 0; i < 4; i++) begin
 			BGR_D[i] = VA_PIPE[0].NxA0CH[i] | VA_PIPE[0].NxA1CH[i] | VA_PIPE[0].NxB0CH[i] | VA_PIPE[0].NxB1CH[i];
-			BGR_D[4 + i * 2 +: 2] = VA_PIPE[0].NxA0CH[i] && NxCH_ADDR[NBG_A0VA.Nx][18:17] == 2'b00 ? 2'd0 :
-			                        VA_PIPE[0].NxA1CH[i] && NxCH_ADDR[NBG_A1VA.Nx][18:17] == 2'b01 ? 2'd1 :
-			                        VA_PIPE[0].NxB0CH[i] && NxCH_ADDR[NBG_B0VA.Nx][18:17] == 2'b10 ? 2'd2 :
+			BGR_D[4 + i * 2 +: 2] = VA_PIPE[0].NxA0CH[i] && NxCH_ADDR[i][18:17] == 2'b00 ? 2'd0 :
+			                        VA_PIPE[0].NxA1CH[i] && NxCH_ADDR[i][18:17] == 2'b01 ? 2'd1 :
+			                        VA_PIPE[0].NxB0CH[i] && NxCH_ADDR[i][18:17] == 2'b10 ? 2'd2 :
 			                        2'd3;
 			BGR_D[12 + i * 3 +: 3] = NBG_CH_CNT[i];
 		end
@@ -2645,14 +2649,14 @@ module VDP2 (
 			//NBG0,NBG1,NBG2,NBG3
 			for (int i=0; i<4; i++) begin
 				BG_PIPE[0].NxPN[i] = VA_PIPE[0].NxA0PN[i] | VA_PIPE[0].NxA1PN[i] | VA_PIPE[0].NxB0PN[i] | VA_PIPE[0].NxB1PN[i];
-				BG_PIPE[0].NxPNS[i] = VA_PIPE[0].NxA0PN[i] && NxPN_ADDR[NBG_A0VA.Nx][18:17] == 2'b00 ? 2'd0 : 
-									       VA_PIPE[0].NxA1PN[i] && NxPN_ADDR[NBG_A1VA.Nx][18:17] == 2'b01 ? 2'd1 : 
-									       VA_PIPE[0].NxB0PN[i] && NxPN_ADDR[NBG_B0VA.Nx][18:17] == 2'b10 ? 2'd2 : 
+				BG_PIPE[0].NxPNS[i] = VA_PIPE[0].NxA0PN[i] && NxPN_ADDR[i][18:17] == 2'b00 ? 2'd0 : 
+									       VA_PIPE[0].NxA1PN[i] && NxPN_ADDR[i][18:17] == 2'b01 ? 2'd1 : 
+									       VA_PIPE[0].NxB0PN[i] && NxPN_ADDR[i][18:17] == 2'b10 ? 2'd2 : 
 									       2'd3;
 				BG_PIPE[0].NxCH[i] = VA_PIPE[0].NxA0CH[i] | VA_PIPE[0].NxA1CH[i] | VA_PIPE[0].NxB0CH[i] | VA_PIPE[0].NxB1CH[i];
-				BG_PIPE[0].NxCHS[i] = VA_PIPE[0].NxA0CH[i] && NxCH_ADDR[NBG_A0VA.Nx][18:17] == 2'b00 ? 2'd0 : 
-									       VA_PIPE[0].NxA1CH[i] && NxCH_ADDR[NBG_A1VA.Nx][18:17] == 2'b01 ? 2'd1 : 
-									       VA_PIPE[0].NxB0CH[i] && NxCH_ADDR[NBG_B0VA.Nx][18:17] == 2'b10 ? 2'd2 : 
+				BG_PIPE[0].NxCHS[i] = VA_PIPE[0].NxA0CH[i] && NxCH_ADDR[i][18:17] == 2'b00 ? 2'd0 : 
+									       VA_PIPE[0].NxA1CH[i] && NxCH_ADDR[i][18:17] == 2'b01 ? 2'd1 : 
+									       VA_PIPE[0].NxB0CH[i] && NxCH_ADDR[i][18:17] == 2'b10 ? 2'd2 : 
 									       2'd3;
 				if (i < 2) begin
 					BG_PIPE[0].NxVS[i] = VA_PIPE[0].NxA0VS[i] | VA_PIPE[0].NxA1VS[i] | VA_PIPE[0].NxB0VS[i] | VA_PIPE[0].NxB1VS[i];
