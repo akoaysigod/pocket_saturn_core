@@ -791,7 +791,6 @@ set_global_assignment -name VERILOG_MACRO "CUT_SCU_INT=1"
 set_global_assignment -name VERILOG_MACRO "CUT_SCU_FACT=1"
 set_global_assignment -name VERILOG_MACRO "CUT_SCSP_DMA=1"
 set_global_assignment -name VERILOG_MACRO "CUT_VDP2_GRAD=1"
-set_global_assignment -name VERILOG_MACRO "CUT_VDP2_RBG0_16M=1"
 set_global_assignment -name VERILOG_MACRO "CUT_VDP2_SPWIN=1"
 set_global_assignment -name VERILOG_MACRO "CUT_VDP2_CRKTE=1"
 set_global_assignment -name VERILOG_MACRO "CDB_FEMTORV=1"
@@ -868,4 +867,4 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to sram_lb_n
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to sram_dq[*]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to sram_dq[*]
 # (the build script appends NUM_PARALLEL_PROCESSORS and SEED)
-set_global_assignment -name SEED 6
+set_global_assignment -name SEED 10
