@@ -102,7 +102,10 @@ module CDB_HLE #(
 	endfunction
 
 	// ------------------------------------------------------------------------------------------ declarations
-	bit [15:0] CR[4], HIRQ, HMASK;
+	bit [15:0] HIRQ, HMASK;
+	bit  [3:0] CR_V;                                    // CR[i] written since reset (else it reads 0)
+	wire [15:0] CR_Q;                                   // CR[mem_addr[3:2]] (MLAB, cr_ram)
+	bit        AWR_N_OLD;
 	bit  [3:0] RR_V;                                    // RR[i] written since reset (else it reads 0)
 	wire [15:0] RR_Q;                                   // RR[{AA[5], AA[2]}] (MLAB, rr_ram)
 	bit        CMD_PEND, RES_READ;                       // host wrote CR4 / read CR4
@@ -147,21 +150,22 @@ module CDB_HLE #(
 
 	// ------------------------------------------------------------------------------------------ host interface
 	wire SCU_REG_SEL = (AA[14:12] == 3'b000) & ~ACS2_N;
+	wire       CR_WE = RST_N && RES_N && SCU_REG_SEL && (!AWRL_N || !AWRU_N) && AWR_N_OLD && CE_F && {AA[5:2],2'b00} >= 6'h18 && {AA[5:2],2'b00} <= 6'h24;
 	bit [15:0] SCU_REG_DO;
 	bit        ABUS_WAIT;
 	always @(posedge CLK or negedge RST_N) begin
-		bit        AWR_N_OLD, ARD_N_OLD;
+		bit        ARD_N_OLD;
 		bit        ABUS_DATA_PORT, ABUS_DP_WR;
 		bit [ 2:0] ABUS_WAIT_CNT;
 		bit [15:0] HIRQ_CLR;
 
 		if (!RST_N) begin
-			CR <= '{4{'0}}; HIRQ <= '0; HMASK <= '0; CMD_PEND <= 0; RES_READ <= 0;
+			CR_V <= '0; HIRQ <= '0; HMASK <= '0; CMD_PEND <= 0; RES_READ <= 0;
 			SCU_REG_DO <= '0; ABUS_WAIT <= 0; ABUS_WAIT_CNT <= '0; ABUS_DATA_PORT <= 0; ABUS_DP_WR <= 0;
 			AWR_N_OLD <= 1; ARD_N_OLD <= 1;
 			HOST_POP <= 0; HOST_PUSH <= 0; HOST_WDATA <= '0;
 		end else if (!RES_N) begin
-			CR <= '{4{'0}}; HIRQ <= '0; HMASK <= '0; CMD_PEND <= 0; RES_READ <= 0;
+			CR_V <= '0; HIRQ <= '0; HMASK <= '0; CMD_PEND <= 0; RES_READ <= 0;
 			SCU_REG_DO <= '0; ABUS_WAIT <= 0; ABUS_WAIT_CNT <= '0;
 			HOST_POP <= 0; HOST_PUSH <= 0;
 		end else begin
@@ -178,10 +182,10 @@ module CDB_HLE #(
 					case ({AA[5:2],2'b00})
 						6'h08: HIRQ_CLR = ~ADI;
 						6'h0C: HMASK <= ADI;
-						6'h18: CR[0] <= ADI;
-						6'h1C: CR[1] <= ADI;
-						6'h20: CR[2] <= ADI;
-						6'h24: begin CR[3] <= ADI; CMD_PEND <= 1; end
+						6'h18: CR_V[0] <= 1;
+						6'h1C: CR_V[1] <= 1;
+						6'h20: CR_V[2] <= 1;
+						6'h24: begin CR_V[3] <= 1; CMD_PEND <= 1; end
 						default:;
 					endcase
 					ABUS_WAIT <= ({AA[5:2],2'b00} == 6'h00);
@@ -345,10 +349,7 @@ module CDB_HLE #(
 				case (mem_addr[7:2])
 					6'h00: mem_rdata <= {DISC_IN, 25'h0, DT_END, DT_WR_IDLE, DT_ACT, SEC_BUSY, RES_READ, CMD_PEND};
 					6'h03: mem_rdata <= TIMER;
-					6'h04: mem_rdata <= {16'h0, CR[0]};
-					6'h05: mem_rdata <= {16'h0, CR[1]};
-					6'h06: mem_rdata <= {16'h0, CR[2]};
-					6'h07: mem_rdata <= {16'h0, CR[3]};
+					6'h04, 6'h05, 6'h06, 6'h07: mem_rdata <= {16'h0, CR_V[mem_addr[3:2]] ? CR_Q : 16'h0000};
 					6'h13: mem_rdata <= {14'h0, DT_TOTAL};
 					6'h15: mem_rdata <= {8'h0, AUD_DONE, 6'h0, AUD_COUNT};
 `ifdef CD_EXTIO
@@ -402,6 +403,9 @@ module CDB_HLE #(
 	// RR as an MLAB: written on the same edge as the registers were (the firmware's I/O write), read by the host
 	// at {AA[5], AA[2]} (0x18 / 1C / 20 / 24 -> 0-3), before that edge's write like the registers
 	wire RR_WE = !RESET && mem_valid && !mem_ready && !sel_ram && !sel_cdr && mem_wstrb != 4'b0000 && mem_addr[7:4] == 4'h2;
+	// CR as an MLAB: written by the host with the registers' conditions, read by the firmware at mem_addr[3:2]; a valid
+	// bit per word (cleared by both resets, as the registers were) makes a word that was not written since reset read 0
+	CDB_HLE_REG_RAM cr_ram (.CLK(CLK), .WADDR({AA[5], AA[2]}), .WDATA(ADI), .WE(CR_WE), .RADDR(mem_addr[3:2]), .Q(CR_Q));
 	CDB_HLE_REG_RAM rr_ram (.CLK(CLK), .WADDR(mem_addr[3:2]), .WDATA(mem_wdata[15:0]), .WE(RR_WE), .RADDR({AA[5], AA[2]}), .Q(RR_Q));
 
 	// ------------------------------------------------------------------------------------------ CD RAM arbiter
