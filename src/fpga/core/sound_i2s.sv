@@ -47,11 +47,14 @@ module sound_i2s #(
   // generate MCLK = 12.288mhz with fractional accumulator
   reg [21:0] audgen_accum = 0;
   localparam [20:0] CYCLE_48KHZ = 21'd122880 * 2;
+  // (one adder with a selected constant in place of two: audgen_accum - 742500 + CYCLE_48KHZ, all in 22 bits, is
+  // audgen_accum + (CYCLE_48KHZ - 742500) modulo 2^22)
+  wire audgen_ge = audgen_accum >= 21'd742500;
+  localparam [21:0] ACCUM_STEP_WRAP = 22'(22'(CYCLE_48KHZ) - 22'd742500);
   always @(posedge clk_74a) begin
-    audgen_accum <= audgen_accum + CYCLE_48KHZ;
-    if (audgen_accum >= 21'd742500) begin
+    audgen_accum <= audgen_accum + (audgen_ge ? ACCUM_STEP_WRAP : 22'(CYCLE_48KHZ));
+    if (audgen_ge) begin
       audio_mclk   <= ~audio_mclk;
-      audgen_accum <= audgen_accum - 21'd742500 + CYCLE_48KHZ;
     end
   end
 
