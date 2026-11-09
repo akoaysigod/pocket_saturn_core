@@ -7,8 +7,8 @@
             "description": "Sega Saturn (port of the Saturn_MiSTer core)",
             "author": "akoaysigod",
             "url": "https://github.com/akoaysigod",
-            "version": "0.1.1",
-            "date_release": "2026-11-05"
+            "version": "0.1.2",
+            "date_release": "2026-11-09"
         },
         "framework": {
             "target_product": "Analogue Pocket",

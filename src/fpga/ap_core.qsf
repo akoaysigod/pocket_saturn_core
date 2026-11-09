@@ -810,7 +810,6 @@ set_global_assignment -name VERILOG_MACRO "A7D_VSIG=1"
 set_global_assignment -name VERILOG_MACRO "A8_TRIM=1"
 set_global_assignment -name VERILOG_MACRO "A8_RHC=1"
 set_global_assignment -name VERILOG_MACRO "A8_RHC_SL=8"
-set_global_assignment -name VERILOG_MACRO "A8_RHC_NOPF=1"
 # fresh-eyes candidate 1: every verified exact item (work/fresh/REPORT.txt)
 set_global_assignment -name VERILOG_MACRO "FRESH_WRQ_LENRAM=1"
 set_global_assignment -name VERILOG_MACRO "FRESH_SDRAM1_DIN=1"

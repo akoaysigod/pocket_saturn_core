@@ -1,4 +1,4 @@
-Sega Saturn for the Analogue Pocket, version 0.1-f2s6 (test build: fresh-eyes candidate 2, seed 6)
+Sega Saturn for the Analogue Pocket, version 0.1.2
 A port of the Saturn_MiSTer core (github.com/MiSTer-devel/Saturn_MiSTer) by Sergiy Dvodnenko (srg320) and
 contributors, trimmed to fit the Pocket's FPGA: one controller (digital pad), no save states, no sleep.
 
