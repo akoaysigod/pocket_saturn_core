@@ -588,7 +588,7 @@ module CDB_HLE #(
 		bit        push, last;
 		e = AQ_E;
 		push = AUD_PUSH && AQ_N != 3'd4;
-		last = ACE && AS_VALID && AQ_POS == e[17:8] - 10'd1;
+		last = ACE && AS_VALID && AQ_POS + 10'd1 == e[17:8];     // (AQ_POS == e[17:8] - 1 modulo 1024; AQ_POS + 1 is also the counter's next value)
 		if (RESET || AUD_FLUSH) begin
 			AQ_RP <= '0; AQ_WP <= '0; AQ_N <= '0; AQ_POS <= '0; AUD_COUNT <= '0; AS_VALID <= 0; AS_PH <= '0;
 			AU_REQ <= 0;
