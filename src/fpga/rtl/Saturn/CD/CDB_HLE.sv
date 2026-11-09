@@ -569,13 +569,14 @@ module CDB_HLE #(
 	// ------------------------------------------------------------------------------------------ CD-DA player
 	// A queue of 4 entries {zero, shift[1:0], samples[9:0], page[7:0]}; each ACE sends the next sample (0 while the
 	// queue is empty). The next sample is read from CD RAM ahead of its ACE.
-	bit [20:0] AQ[4];
 	bit  [1:0] AQ_RP, AQ_WP;
 	bit  [2:0] AQ_N;
 	bit  [9:0] AQ_POS;
 	bit        AS_VALID;
 	bit [15:0] AS_L, AS_R;
-	wire [20:0] AQ_E = AQ[AQ_RP];                       // the queue head (the only read of AQ)
+	wire [20:0] AQ_E;                                   // the queue head (AQ, an MLAB: written at AQ_WP, read at AQ_RP)
+	wire        AQ_WE = AUD_PUSH && AQ_N != 3'd4 && !(RESET || AUD_FLUSH);
+	CDB_HLE_AQ_RAM aq_ram (.CLK(CLK), .WADDR(AQ_WP), .WDATA(mem_wdata[20:0]), .WE(AQ_WE), .RADDR(AQ_RP), .Q(AQ_E));
 	(* multstyle = "dsp" *) wire [18:1] AU_PW = AQ_E[7:0] * 11'd1176 + {7'b0, AQ_POS, 1'b0};   // even
 	bit  [1:0] AS_PH;
 	always @(posedge CLK) begin
@@ -589,7 +590,7 @@ module CDB_HLE #(
 			AU_REQ <= 0;
 			if (RESET) begin AUD_DONE <= '0; CD_SL <= '0; CD_SR <= '0; end
 		end else begin
-			if (push) begin AQ[AQ_WP] <= mem_wdata[20:0]; AQ_WP <= AQ_WP + 2'd1; end
+			if (push) AQ_WP <= AQ_WP + 2'd1;
 			if (!AS_VALID && AQ_N != 3'd0) begin
 				if (e[20]) begin AS_L <= '0; AS_R <= '0; AS_VALID <= 1; end
 				else case (AS_PH)
@@ -695,6 +696,14 @@ endmodule
 module CDB_HLE_FIFO_RAM (
 	input CLK, input [2:0] WADDR, input [15:0] WDATA, input WE, input [2:0] RADDR, output [15:0] Q);
 	(* ramstyle = "MLAB, no_rw_check" *) logic [15:0] ram[0:7];
+	always_ff @(posedge CLK) if (WE) ram[WADDR] <= WDATA;
+	assign Q = ram[RADDR];
+endmodule
+
+// The CD-DA queue's 4 x 21 entries as an MLAB with an asynchronous read.
+module CDB_HLE_AQ_RAM (
+	input CLK, input [1:0] WADDR, input [20:0] WDATA, input WE, input [1:0] RADDR, output [20:0] Q);
+	(* ramstyle = "MLAB, no_rw_check" *) logic [20:0] ram[0:3];
 	always_ff @(posedge CLK) if (WE) ram[WADDR] <= WDATA;
 	assign Q = ram[RADDR];
 endmodule
