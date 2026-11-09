@@ -1,0 +1,67 @@
+HOW TO ADD GAMES (Saturn core, akoaysigod.Saturn)
+==================================================
+
+Each game needs two things on the SD card:
+
+  1. Its folder, the .cue and its .bin files, in this folder:   Assets/saturn/common/MyGame/
+  2. Its entry, the game you pick in the menu:                  Assets/saturn/akoaysigod.Saturn/MyGame.json
+
+The core reads the .cue itself. Both kinds of rip work: one .bin per track (Redump) or a
+single .bin (chdman extractcd, binmerge). Up to 25 .bin files per game.
+
+The BIOS goes in this folder too, named boot.rom (512 KB, not included).
+
+
+By hand
+-------
+  1. Copy the game's folder into this folder, as in step 1 above.
+
+  2. Make a text file Assets/saturn/akoaysigod.Saturn/MyGame.json:
+
+       {
+           "instance": {
+               "magic": "APF_VER_1",
+               "data_path": "MyGame/",
+               "data_slots": [
+                   { "id": 14, "filename": "MyGame.cue" },
+                   { "id": 16, "filename": "MyGame (Track 01).bin" },
+                   { "id": 17, "filename": "MyGame (Track 02).bin" }
+               ]
+           }
+       }
+
+     - "data_path": the game's folder name here in Assets/saturn/common/, ending with a /.
+     - id 14: the .cue.
+     - ids 16, 17, 18, ...: the .bin files in the order the .cue lists them (its FILE
+       lines), up to id 40.
+     - "filename": exactly as the file is named.
+     - Every line in the list except the last ends with a comma.
+
+  3. Pick "MyGame" in the core's menu.
+
+On a computer with the core's source, tools/cue2instance.py MyGame.cue writes the .json.
+
+
+Pocket Sync or Pupdate
+----------------------
+The core folder has an instance-packager.json, so these SD card updaters can write the
+.json files ("Instance JSONs" in Pocket Sync, the instance JSON option in Pupdate). Not
+tried with this core yet: check that a written .json has the .cue as id 14 and the .bin
+files from id 16 in the .cue's order.
+
+
+Notes
+-----
+  - The .json's name is the name in the menu and the name of the game's save files
+    (in Saves/saturn/akoaysigod.Saturn/). Renaming the .json starts the game with empty
+    backup RAM.
+  - Region: the core can't read a disc's region on the Pocket and starts as USA. For a
+    Japanese or European game, set Core Settings > Region, then choose Reset.
+  - Games that need a RAM cartridge (1 MB or 4 MB): set Core Settings > Cartridge, then
+    choose Reset. "Backup RAM" gives the save cartridge, saved with the game.
+  - Not supported: CHD (convert it: chdman extractcd -i MyGame.chd -o MyGame.cue), ISO
+    (MODE1/2048) tracks, WAVE / MP3 / OGG audio files, .ccd / .mds images.
+  - Multi-disc games: one folder per disc. Each disc is its own entry with its own saves;
+    the core can't swap discs.
+  - "BIOS (no disc)" in the menu boots the BIOS (CD player and system settings) without a
+    game.
