@@ -80,6 +80,8 @@ uint32_t w_limit(void);                       // the world knows its inputs up t
 uint8_t w_pio(int port, uint32_t t);          // PIOA_I (0) / PIOB_I (1)
 uint8_t w_area(void);                         // R5
 uint8_t w_ireg(int i, uint32_t t);            // IREG0-6; 7 = COMREG
+void w_ireg_watch(uint8_t v);                 // the program stopped in a loop that reads IREG0 (seen as v): a change
+                                              // of IREG0 is an input change (run it again)
 int w_comreg(uint32_t t);                     // the host wrote COMREG and the write is seen by the CE edge t (once)
 void w_d_out(uint16_t pins, uint32_t t);      // D pins (D_O | ~D_D) after a change at the edge t
 void w_r_out(int n, uint8_t o, uint8_t dcr, uint32_t t);   // R port n latch / direction after a change
@@ -186,7 +188,8 @@ extern volatile const uint32_t* mcu_brk_p;
 #define IDLE_TCC 2                    // the body reads TRCU / TRCL (timer C) and peripheral flags
 #define IDLE_TCMP 4                   // loop 02B9 (gen_mcu.py checks its listing): waits until timer C >= ERAM0:ERAM1;
                                       // a pass is 24 CE while TRCU < ERAM0, 56 CE while TRCU = ERAM0, TRCL < ERAM1
-#define MCU_NIDLE 4
+#define IDLE_IREG 8                   // the body reads IREG0 (P at FF0; loop 0615, INTBACK's continue / break wait)
+#define MCU_NIDLE 5                   // idle loops (gen_mcu.py IDLE; the generated code checks)
 uint32_t idle_head(int i, int h, uint32_t vt, uint32_t k0, uint32_t k1);
 #define MCU_IDLE(label, pc_, i, h) do { \
 	vt += idle_head((i), (h), vt, (uint32_t)A | (uint32_t)B << 4 | (uint32_t)X << 8 | (uint32_t)Y << 12 | (uint32_t)W << 16 | \

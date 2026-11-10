@@ -583,8 +583,11 @@ uint8_t rtc_init(int i, uint32_t t)
 #if !defined(MCU_FAITHFUL) && !defined(RT_EDGE)
 // ---- fast build: idle loops (gen_mcu.py IDLE). A loop pass depends only on the registers at the head and on what its
 // body reads: the peripheral flags (they change only at peripheral events), R0 (VBLANK, COMREG_INT: VBLANK changes,
-// events), TRCU / TRCL (timer C ticks). If the last pass started from the same registers as this one and nothing it
-// reads changed during it, the next passes repeat it as long as nothing it reads changes: skip them.
+// events), TRCU / TRCL (timer C ticks), IREG0 (IDLE_IREG). If the last pass started from the same registers as this one
+// and nothing it reads changed during it, the next passes repeat it as long as nothing it reads changes: skip them.
+// IREG0 has no edge stamp (w_ireg: its value now, as for every pattern read): the passes up to now read the value now.
+// It is part of the key (the pass after a change runs and sees it), and a program stopped at the head wakes when it
+// changes (w_ireg_watch): the host's continue / break is taken one poll after its write.
 #ifdef MCU_PROFILE
 uint32_t mcu_count[2048];
 #endif
@@ -603,8 +606,10 @@ uint32_t idle_head(int i, int h, uint32_t vt, uint32_t k0, uint32_t k1)
 {
 	idle_t* r = &idl[i];
 	uint32_t per = 0;
+	uint8_t ir = 0;
 	m.waiting = 0;
 	PTO(vt);
+	if (h & IDLE_IREG) { ir = w_ireg(0, vt); k1 |= (uint32_t)ir << 8; }   // (k1: SP, 6 bits)
 	if (r->valid && r->k0 == k0 && r->k1 == k1 && r->nev == P.nev) {
 		uint32_t d = vt - r->vt;
 		if (!d) { if (r->fix) per = r->per; }                  // run again after a stop here
@@ -633,7 +638,10 @@ uint32_t idle_head(int i, int h, uint32_t vt, uint32_t k0, uint32_t k1)
 	if (wait) he = lim;
 	if (t_le(vt + per, he)) { uint32_t d = he - vt; skip = d - d % per; }
 	if (skip || wait) { r->fix = 1; r->per = per; r->vt = vt + skip; }
-	if (wait) { m.waiting = 1; m.wake_at = wake; }   // the world does not know the inputs that far: stop here
+	if (wait) {                                      // the world does not know the inputs that far: stop here
+		m.waiting = 1; m.wake_at = wake;
+		if (h & IDLE_IREG) w_ireg_watch(ir);
+	}
 #ifdef IDLE_DEBUG
 	idle_dbg(i, vt, per, next_ev(), he, lim, skip, wait);
 #endif

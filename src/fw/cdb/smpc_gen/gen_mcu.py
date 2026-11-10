@@ -155,7 +155,12 @@ for pc in code:             # every goto target needs its label (also a branch t
 # inputs that far yet).
 # The delay routine 00D6-00EC (called as CALS 00F) counts MR1 / MR0 / B down from constants: it is replaced by its
 # result (checked against the listing below; the bench compares the fast build with the reference).
-IDLE = {0x265: (0x26D, 'IDLE_VBL'), 0x275: (0x27B, 'IDLE_VBL'), 0x27E: (0x285, 'IDLE_VBL'), 0x2B9: (0x2C7, 'IDLE_TCC | IDLE_TCMP')}
+# 0615: INTBACK waits for the host's continue / break (IREG0 bit 7 toggled / bit 6), abort at VBLANK-in (RF2.IF2, R0).
+# Run pass by pass it falls behind the present while the host does not answer (Sega Rally answers only after a
+# RESENAB it calls with interrupts masked; the abort came ~8.5 ms after VBLANK-in instead of ~25 us and the game's
+# INTBACK sequence fell out of step with the SMPC). IDLE_IREG: its pattern read of IREG0 (checked below).
+IDLE = {0x265: (0x26D, 'IDLE_VBL'), 0x275: (0x27B, 'IDLE_VBL'), 0x27E: (0x285, 'IDLE_VBL'), 0x2B9: (0x2C7, 'IDLE_TCC | IDLE_TCMP'),
+        0x615: (0x637, 'IDLE_VBL | IDLE_IREG')}
 # IDLE_TCMP (the runtime's idle_head relies on this exact loop): wait until timer C >= ERAM0:ERAM1. A pass is 24 CE
 # while TRCU < ERAM0 (02B9 02BB 02BD 02BE), 56 CE while TRCU = ERAM0 and TRCL < ERAM1 (... 02BF 02C1 02C2 02C4 02C6
 # 02C7): the passes take the same path until TC reaches ERAM0 * 16 resp. ERAM0:ERAM1, not only until its next tick
@@ -203,6 +208,13 @@ def check_fast():
                     assert not (d['MW'] or d['IOW'] or d['SPI'] or d['SPD'] or d['SBY'] or d['STOP']), \
                         'idle loop %03X: %03X %s writes' % (head, p, dis(p))
                     assert PCU[d['PCU']] not in ('TBR', 'RTN', 'INT'), 'idle loop %03X: %03X' % (head, p)
+        # a pattern read (P) in the body: IREG0 only (P F at {00, F, B, A} with LAI 0 / LBI F just before it: FF0), and
+        # the loop is IDLE_IREG (idle_head keys the passes on IREG0 and wakes the loop when it changes); else none
+        bl = sorted(body)
+        for j, p in enumerate(bl):
+            if any(d['PI'] for st in (0, 1) for d in states(code[p], st, 1)):
+                assert 'IDLE_IREG' in IDLE[head][1] and j >= 2 and bl[j - 2] + 2 == bl[j - 1] + 1 == p and \
+                    [dis(q) for q in bl[j - 2:j + 1]] == ['LAI 0', 'LBI F', 'P F'], 'idle loop %03X: %03X %s' % (head, p, dis(p))
 IDLE_BODY = {}
 DELAY_SKIP = set()
 LEAD |= set(IDLE) | {DELAY[1]}
@@ -516,5 +528,7 @@ if not FAITHFUL:
     # the world's run limit (MCU_RUN_CAP, smpc_mcu.h) must let every block run
     emit('_Static_assert(%d <= MCU_RUN_CAP, "a block needs more than MCU_RUN_CAP edges");' % MAX_D)
     emit('_Static_assert(%d <= MCU_RUN_MIN, "a block needs more than MCU_RUN_MIN edges");' % MAX_D)
+    # idle_head keeps one record per idle loop (IDLE_ID)
+    emit('_Static_assert(%d <= MCU_NIDLE, "more idle loops than MCU_NIDLE");' % len(IDLE))
 open(OUT, 'w').write('\n'.join(L) + '\n')
 print('%d instructions, %d labels, %d return points' % (len(code), len(LABELS), len(RET_POINTS)), file=sys.stderr)
