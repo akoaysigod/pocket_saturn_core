@@ -454,6 +454,8 @@ module SH_core_cs
 			DA = key;
 	end
 
+	// SRS[2] / EXOP.VB / VECT_SH below rely on properties of this ROM's contents: run tools/check_shdec_rom.py after
+	// regenerating it
 	(* romstyle = "M10K" *) bit [79:0] DEC_ROM[1024];
 	initial begin
 		$readmemh("shdec_rom.hex", DEC_ROM);
