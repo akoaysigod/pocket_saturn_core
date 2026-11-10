@@ -33,6 +33,10 @@ static uint8_t vbl_seen_v;       // IRQV_N as last taken in
 // COMREG writes not taken by the program yet: the edge each is visible from, oldest first
 enum { NCOM = 2 };
 static uint32_t com_e[NCOM]; static uint8_t com_n, com_tgl;
+// IREG0 while the program is stopped in a loop that reads it (w_ireg_watch; INTBACK's continue / break wait): SMPC_FW.sv
+// reports no IREG write as an event, so the poll compares IREG0 itself while irw_on (cleared when the program runs)
+static uint8_t irw_on, irw_v;
+static inline bool irw_changed(void) { return irw_on && (uint8_t)(S_INP(0) >> 24) != irw_v; }
 // outputs
 static uint16_t d_pins;          // D_O | ~D_D (0xFFFF after RST_N: smpc_init)
 static uint8_t r_o[8], r_dcr[8], cdres;
@@ -95,6 +99,8 @@ static void refresh(void)
 		changed = true;
 		periph_dirty();
 	}
+	// IREG0 (the peripherals do not depend on it: no periph_dirty)
+	if (irw_changed()) { irw_on = 0; changed = true; }
 	// RTC
 	uint8_t rt = (uint8_t)(ev >> 31);
 	if (rt != rtc_old) { rtc_old = rt; rtc_capture(); }
@@ -107,6 +113,7 @@ void smpc_init(void)
 	now = 0; now24 = 0;
 	vbl_n = 1; vbl_e[0] = 0; vbl_v[0] = 1; vbl_seen_v = 1;   // SMPC_FW after RST_N: IRQV_N 1 (from edge 0)
 	com_n = 0; com_tgl = 0;
+	irw_on = 0;
 	d_pins = 0xFFFF; cdres = 0;
 	for (int i = 0; i < 8; i++) { r_o[i] = 0; r_dcr[i] = 0; }
 	rtc_default();
@@ -132,10 +139,11 @@ static bool in_poll;
 static uint32_t due24;           // the 24-bit edge from which the program can run (if no input event comes first)
 static void poll_run(void) __attribute__((noinline));
 // the CD code polls often (its main loop, long loops, memset / memcpy): nothing to do unless an input event came
-// (S_EVT changed) or the program's next edge has come (the 24-bit edge count, sign of the difference)
+// (S_EVT changed, or IREG0 while watched) or the program's next edge has come (the 24-bit edge count, sign of the
+// difference)
 void smpc_poll(void)
 {
-	if (S_EVT == last_ev && (int32_t)((S_TIME - due24) << 8) < 0) return;
+	if (S_EVT == last_ev && (int32_t)((S_TIME - due24) << 8) < 0 && !irw_changed()) return;
 	if (in_poll) return;                         // memset / memcpy poll too: not from inside the SMPC code
 	poll_run();
 }
@@ -175,6 +183,7 @@ static void poll_run(void)
 			break;
 		}
 		changed = false;
+		irw_on = 0;                              // (idle_head watches again if the program stops in the loop again)
 		if (wt_lt(m.vt + cap, mcu_lim)) mcu_lim = m.vt + cap;
 		mcu_exec();
 		refresh();
@@ -228,6 +237,7 @@ uint8_t w_d3(uint32_t t) { (void)t; return (S_INP(0) >> 18) & 1; }
 uint8_t w_pio(int port, uint32_t t) { (void)t; uint32_t in = S_INP(0); return (uint8_t)((port ? in >> 7 : in) & 0x7F); }
 uint8_t w_area(void) { return (S_INP(0) >> 14) & 15; }
 uint8_t w_ireg(int i, uint32_t t) { (void)t; return (uint8_t)(S_INP(i & 7) >> 24); }
+void w_ireg_watch(uint8_t v) { irw_on = 1; irw_v = v; }
 uint8_t w_rtc_init(int i) { return rtc_nib[i & 15]; }
 
 static void dpin_out(void) { S_DPIN = ((uint32_t)cdres << 8) | (((d_pins >> 4) & 0x7F) << 1) | (d_pins & 1); }
