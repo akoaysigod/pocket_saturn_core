@@ -423,7 +423,9 @@ enum
 
  DRIVEPHASE_PAUSE
 };
-static int32_t DriveCounter;
+// A pending external source can retain elapsed debt beyond the signed 32-bit
+// timer half-range. Preserve that debt; each clocks sample remains int32_t.
+static int64_t DriveCounter;
 static int32_t PeriodicIdleCounter;
 #define PeriodicIdleCounter_Reload 187065
 
