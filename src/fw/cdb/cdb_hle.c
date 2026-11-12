@@ -3898,7 +3898,8 @@ int main(void)
   }
 #endif
 #ifdef SMPC_FW
-  smpc_cd_deadline = now + (uint32_t)DriveCounter;
+  // DriveCounter is relative to the latest CDB_Run sample (including the pickup wait).
+  smpc_cd_deadline = last + (uint32_t)DriveCounter;
   smpc_cd_deadline_on = DrivePhase == DRIVEPHASE_PLAY && DriveCounter > 0;
 #endif
  }
