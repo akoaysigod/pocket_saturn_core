@@ -349,8 +349,11 @@ module vdp1fb_ext #(
 		localparam int m = gm;
 		// byte merge on the PSRAM's queue only (8 bpp draws there would otherwise cost two accesses per word; the
 		// SRAM keeps up with them)
-		fb_queue #(.AW(17), .TW(TW), .BM((m == 1 || FB0_PS) && !PS_BWC), .BWC((m == 1 || FB0_PS) && PS_BWC)) queue (
+		fb_queue #(.AW(17), .TW(TW), .BM((m == 1 || FB0_PS) && !PS_BWC), .BWC((m == 1 || FB0_PS) && PS_BWC), .CTX_BEQ((m == 1 || FB0_PS) && PS_BWC)) queue (
 			.clk(clk_ram), .rst(q_rst),   // (A7: q_rst)
+			.ctx_draw_block(c_fbd_a[17:6]), .ctx_erase_block(c_fbv_a[17:6]),
+			.ctx_pref0_block({hl_line[0], fl_blk[0]}), .ctx_pref1_block({hl_line[1], fl_blk[1]}),
+			.ctx_draw((d_we || d_rd) && mdraw == m), .ctx_erase(e_we && !mdraw == m), .ctx_pref_sel(pf_sel),
 			.req_valid(q_valid[m]), .req_we(q_we[m]), .req_addr(q_addr[m]), .req_len(q_len[m]), .req_data(q_data[m]),
 `ifdef A6_DBG
 			.req_nm(q_nm[m]),

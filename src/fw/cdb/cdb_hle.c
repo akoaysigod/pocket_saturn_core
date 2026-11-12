@@ -423,7 +423,9 @@ enum
 
  DRIVEPHASE_PAUSE
 };
-static int32_t DriveCounter;
+// A pending external source can retain elapsed debt beyond the signed 32-bit
+// timer half-range. Preserve that debt; each clocks sample remains int32_t.
+static int64_t DriveCounter;
 static int32_t PeriodicIdleCounter;
 #define PeriodicIdleCounter_Reload 187065
 
@@ -3898,7 +3900,8 @@ int main(void)
   }
 #endif
 #ifdef SMPC_FW
-  smpc_cd_deadline = now + (uint32_t)DriveCounter;
+  // DriveCounter is relative to the latest CDB_Run sample (including the pickup wait).
+  smpc_cd_deadline = last + (uint32_t)DriveCounter;
   smpc_cd_deadline_on = DrivePhase == DRIVEPHASE_PLAY && DriveCounter > 0;
 #endif
  }

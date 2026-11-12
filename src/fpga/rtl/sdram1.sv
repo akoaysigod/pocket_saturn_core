@@ -162,6 +162,14 @@ module sdram1
 	reg         rd[2];
 	reg [19: 1] addr2;			// (a1: no addr2_pipe: addr2 cannot change between a read's ACTIVE and its READ, see slot 0)
 	reg [15: 0] din2;
+	// Two explicit combinational identity stages; preserve the original capture enable.
+	wire [15:0] ch2din_hold0, ch2din_hold1;
+	genvar hold_bit;
+	generate for (hold_bit = 0; hold_bit < 16; hold_bit = hold_bit + 1) begin : g_ch2_hold
+		lcell hold0 (.in(ch2din[hold_bit]), .out(ch2din_hold0[hold_bit]));
+		lcell hold1 (.in(ch2din_hold0[hold_bit]), .out(ch2din_hold1[hold_bit]));
+	end endgenerate
+
 	reg         wr2;
 	reg         rd2,rd2_pipe;
 	reg [ 1: 0] be2;
@@ -208,7 +216,7 @@ module sdram1
 			
 			if (st_num[2:0] == 3'd7 && !rd2 && !wr2 && (rd2_pend || wr2_pend) && !ch2_lock) begin
 				addr2 <= ch2addr;
-				din2 <= ch2din;
+				din2 <= ch2din_hold1;
 				rd2 <= rd2_pend & ~|wr2_pend;
 				wr2 <= |wr2_pend;
 				be2 <= wr2_pend;

@@ -857,7 +857,7 @@ module VDP2 (
 		
 		if (!RST_N) begin
 			// synopsys translate_off
-			VA_PIPE <= '{4{'0}};
+			VA_PIPE <= '{default:VRAMAccessState_t'{default:'0}};
 			// synopsys translate_on
 		end
 		else if (DOT_CE_R) begin
@@ -2637,12 +2637,6 @@ module VDP2 (
 		
 		if (!RST_N) begin
 			// synopsys translate_off
-			NBG_CDL[0] <= '{8{'0}};
-			NBG_CDL[1] <= '{8{'0}};
-			NBG_CDL[2] <= '{8{'0}};
-			NBG_CDL[3] <= '{8{'0}};
-			RBG_CDL[0] <= '{8{'0}};
-			RBG_CDL[1] <= '{8{'0}};
 			// synopsys translate_on
 		end
 		else begin
@@ -3580,11 +3574,6 @@ module VDP2 (
 	
 		if (!RST_N) begin
 			// synopsys translate_off
-			R0DOT <= DD_NULL;
-			N0DOT <= DD_NULL;
-			N1DOT <= DD_NULL;
-			N2DOT <= DD_NULL;
-			N3DOT <= DD_NULL;
 			// synopsys translate_on
 		end
 		else if (DOT_CE_R || (DOT_CE_F & HRES[1])) begin
@@ -3892,10 +3881,10 @@ module VDP2 (
 			// place and the places can be OR-ed together. An empty place keeps index 0 (back screen) with BOK / LC 0, as the
 			// insertion left them (FI / SI / TI, FBOK, SBOK, FLC: the same values in every case).
 			LV[0] = 0; LP[0] = 3'd0; LB[0] = 0; LL[0] = 0;
-			LV[1] = DISP && SON  && (SPRIN  != 3'd0); LP[1] = SPRIN;  LB[1] = SBOKEN;  LL[1] = SLCEN;
-			LV[2] = DISP && R0ON && (R0PRIN != 3'd0); LP[2] = R0PRIN; LB[2] = R0BOKEN; LL[2] = R0LCEN;
+			LV[1] = DISP_INT && SON  && (SPRIN  != 3'd0); LP[1] = SPRIN;  LB[1] = SBOKEN;  LL[1] = SLCEN;
+			LV[2] = DISP_INT && R0ON && (R0PRIN != 3'd0); LP[2] = R0PRIN; LB[2] = R0BOKEN; LL[2] = R0LCEN;
 			for (int k = 0; k < 4; k++) begin
-				LV[3+k] = DISP && NkON[k] && (NkPRIN[k] != 3'd0); LP[3+k] = NkPRIN[k]; LB[3+k] = NkBOK[k]; LL[3+k] = NkLC[k];
+				LV[3+k] = DISP_INT && NkON[k] && (NkPRIN[k] != 3'd0); LP[3+k] = NkPRIN[k]; LB[3+k] = NkBOK[k]; LL[3+k] = NkLC[k];
 			end
 			FI = 4'd0; FBOK = 0; FLC = 0;
 			SI = 4'd0; SBOK = 0;
