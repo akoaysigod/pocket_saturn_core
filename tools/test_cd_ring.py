@@ -117,12 +117,13 @@ def main():
     ap.add_argument('--out', type=Path, help='Fresh directory; existing paths are rejected')
     args = ap.parse_args()
     source = args.source.resolve()
-    rtl = source.read_text()
+    source_bytes = source.read_bytes()
+    rtl = source_bytes.decode('utf-8')
     out = args.out.resolve() if args.out else Path(tempfile.mkdtemp(prefix='cd-ring-'))
     if args.out:
         out.mkdir(parents=True, exist_ok=False)
     results = []
-    receipt = dict(source=str(source), source_sha256=sha(source),
+    receipt = dict(source=str(source), source_sha256=hashlib.sha256(source_bytes).hexdigest(),
                    script_sha256=sha(Path(__file__)), results=results, passed=False)
     print(f'Artifacts: {out}', flush=True)
 
@@ -137,7 +138,7 @@ def main():
             raise RuntimeError(f'Timeout: {name}') from exc
 
     try:
-        (out / 'source.sv').write_text(rtl)
+        (out / 'source.sv').write_bytes(source_bytes)
         (out / 'tb.sv').write_text(TB)
         # Mutation anchors deliberately fail closed on unsupported source shapes.
         # Mutate actual public source, not the stimulus or expected-byte oracle.
