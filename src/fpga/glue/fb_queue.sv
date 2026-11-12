@@ -34,7 +34,8 @@ module fb_queue #(
 	parameter int CD = 3,            // log2 command FIFO depth
 	parameter int DD = 6,            // log2 write data FIFO depth (words; BWC = 0)
 	parameter bit BM = 1'b0,         // byte merge into the open burst's last word (BWC = 0)
-	parameter bit BWC = 1'b0         // block write combining (option g)
+	parameter bit BWC = 1'b0,        // block write combining (option g)
+parameter bit CTX_BEQ = 1'b0    // optional producer block metadata; no extra state
 ) (
 	input  logic          clk,
 	input  logic          rst,
@@ -72,7 +73,10 @@ module fb_queue #(
 	output logic          rsp_valid,
 	output logic   [15:0] rsp_data,
 	output logic [TW-1:0] rsp_tag,
-	output logic          rsp_last
+	output logic          rsp_last,
+	// Optional BWC metadata: exact producer priority and indexed prefetch selection.
+	input logic [AW-6:0] ctx_draw_block, ctx_erase_block, ctx_pref0_block, ctx_pref1_block,
+	input logic ctx_draw, ctx_erase, ctx_pref_sel
 );
 	localparam int CN = 1 << CD, DN = 1 << DD;
 	// a command {we, addr, len, tag} as a packed vector (Quartus 25.1 rejects struct member writes in generate blocks)
@@ -254,10 +258,32 @@ module fb_queue #(
 	// merge: a write into the block of an open command that the memory cannot take in this clk
 	wire [4:0]    roff = raddr[4:0];
 	wire [BW-1:0] rblk = raddr[AW-1:5];
-	always_ff @(posedge clk) begin
-		for (int k = 0; k < 2; k++) beq[k] <= req_addr[AW-1:5] == oblk[k];
-		beq_stale <= rv;
+	if (CTX_BEQ) begin : g_ctx
+	(* keep = "true" *) wire [1:0] ctx_eq_draw, ctx_eq_erase, ctx_eq_pref0, ctx_eq_pref1;
+	logic [1:0] ctx_equal;
+	wire [1:0] ctx_pref_equal[2];
+	assign ctx_pref_equal[0] = {ctx_eq_pref1[0], ctx_eq_pref0[0]};
+	assign ctx_pref_equal[1] = {ctx_eq_pref1[1], ctx_eq_pref0[1]};
+	assign ctx_eq_draw = {ctx_draw_block == oblk[1], ctx_draw_block == oblk[0]};
+	assign ctx_eq_erase = {ctx_erase_block == oblk[1], ctx_erase_block == oblk[0]};
+	assign ctx_eq_pref0 = {ctx_pref0_block == oblk[1], ctx_pref0_block == oblk[0]};
+	assign ctx_eq_pref1 = {ctx_pref1_block == oblk[1], ctx_pref1_block == oblk[0]};
+	always_comb begin
+		for (int k = 0; k < 2; k++) begin
+			// Procedural priority deliberately preserves unknown-condition fallthrough.
+			if (ctx_draw) ctx_equal[k] = ctx_eq_draw[k];
+			else if (ctx_erase) ctx_equal[k] = ctx_eq_erase[k];
+			// Indexed selection deliberately returns X for an unknown index.
+			else ctx_equal[k] = ctx_pref_equal[k][ctx_pref_sel];
+		end
 	end
+	always_ff @(posedge clk) begin
+		for (int k = 0; k < 2; k++) beq[k] <= ctx_equal[k];
+	end
+	end else begin : g_plain
+		always_ff @(posedge clk) for (int k = 0; k < 2; k++) beq[k] <= req_addr[AW-1:5] == oblk[k];
+	end
+	always_ff @(posedge clk) beq_stale <= rv;
 	// (A2, timing, exact) m_ready (the memory's ready: decoded from its state registers, a late input) comes last: the
 	// hit is formed for m_ready = 0 (h0) and m_ready = 1 (h1) in parallel, and so are the command slot write (cw_a /
 	// cw_d below); m_ready picks (the same values as before for either value of m_ready)
@@ -304,12 +330,12 @@ module fb_queue #(
 	// (A2) = merge ? oslot[mk] : ctail and the merged / new command word, formed per value of m_ready (h0 / h1)
 	wire    [4:0] lo0 = h0[0] ? k_lo[0] : k_lo[1], hi0 = h0[0] ? k_hi[0] : k_hi[1];
 	wire    [4:0] lo1 = h1[0] ? k_lo[0] : k_lo[1], hi1 = h1[0] ? k_hi[0] : k_hi[1];
-	wire [CD-1:0] cw_a0 = (|h0) ? oslot[!h0[0]] : ctail[CD-1:0];
-	wire [CD-1:0] cw_a1 = (|h1) ? oslot[!h1[0]] : ctail[CD-1:0];
+	(* keep = "true" *) wire [CD-1:0] cw_a0 = (|h0) ? oslot[!h0[0]] : ctail[CD-1:0];
+	(* keep = "true" *) wire [CD-1:0] cw_a1 = (|h1) ? oslot[!h1[0]] : ctail[CD-1:0];
 	wire [CD-1:0] cw_a = m_ready ? cw_a1 : cw_a0;
 	wire [CMW-1:0] cw_n  = {rwe, rblk, roff, rwe ? roff : 5'(roff + rlen), rtag};
-	wire [CMW-1:0] cw_d0 = (|h0) ? {1'b1, rblk, lo0, hi0, {TW{1'b0}}} : cw_n;
-	wire [CMW-1:0] cw_d1 = (|h1) ? {1'b1, rblk, lo1, hi1, {TW{1'b0}}} : cw_n;
+	(* keep = "true" *) wire [CMW-1:0] cw_d0 = (|h0) ? {1'b1, rblk, lo0, hi0, {TW{1'b0}}} : cw_n;
+	(* keep = "true" *) wire [CMW-1:0] cw_d1 = (|h1) ? {1'b1, rblk, lo1, hi1, {TW{1'b0}}} : cw_n;
 	wire [CMW-1:0] cw_d = m_ready ? cw_d1 : cw_d0;
 	always_ff @(posedge clk) begin
 		if (cw) cmem[cw_a] <= cw_d;

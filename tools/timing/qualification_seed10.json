@@ -1,0 +1,149 @@
+{
+  "status": "QUALIFIED_LOCAL_SCREEN_EXACT_PHYSICAL_REPLICA_EXCEPTION",
+  "upstream_revision": "77fae10e6da2f444bfbafc0551fdedcb77911c37",
+  "firmware_parent_pr": 21,
+  "qualification_evidence_sha256": "85767d192034b634612adf7898c514973bee0972e3eef0da36524ada33b9960d",
+  "independent_final_review_sha256": "c03434dd37d1647c0ba58469c93aeb9810089eafe5aed5a20df00b292f35afac",
+  "original_strict_evidence_sha256": "53963968297094d7f20ddc7f3e6a5b49caf092f824d7362784c548ec394189f1",
+  "original_strict_status": "FAIL_PHYSICAL_UNCONSTRAINED_INPUT_COUNT",
+  "source_files": {
+    "src/fpga/glue/cd_ring.sv": "8c07dfee406ed89f083713501745c09a1e1c9f9318dbc0559d886a9edb600b6d",
+    "src/fpga/glue/fb_queue.sv": "5e087a8c1e29ad52238eba1b68408d588aecf2c1104b5f50cd3c2e58649599ed",
+    "src/fpga/rtl/Saturn/VDP2/VDP2.sv": "feba537418814a6e5565a92ba3d8d9c8e1ce22a4bb1c79ec0eb6f630ac2ff2b4",
+    "src/fw/cdb/cdb_hle.c": "c63cc91140093f2317607a6f521bc6eb57d56f83d8728150f1cc8362a2968a8d",
+    "src/fpga/glue/wr_queue.sv": "984aef6f92f0955cf694f9e6d51bd2c280e27a636354930768eae3353fdb213a",
+    "src/fpga/glue/vdp1fb_ext.sv": "ca0da9f344323e967bec9ce458be28bd53aaedf2e092a1e929ef1d336d9ac67e",
+    "src/fpga/rtl/sdram1.sv": "79904fccedad6e89a7dcaa9498ecba1c132c29eb2c081ca31cbfb9e9dd9a73aa",
+    "src/fpga/ap_core.qsf": "a19c6fd3233f146ab8ef5d5c5046e143dc0f11f4d5df3f5871424997043c199b",
+    "src/fpga/pocket_hold_margin.sdc": "06abbc75b6843127901e3c007487502c7ef813284bf1ed00a281ef6bc162312b"
+  },
+  "toolchain": "Quartus Standard25.1std.0 Build1129",
+  "device": "5CEBA4F23C8",
+  "seed": 10,
+  "processors": 8,
+  "resources": {
+    "needed_alms": 17532,
+    "registers": 21190,
+    "m10k": 281,
+    "dsp": 47,
+    "virtual_pins": 0,
+    "placed_alms": 18000,
+    "occupied_labs": 1844
+  },
+  "resource_delta": {
+    "placed_alms": -33,
+    "occupied_labs": -3,
+    "m10k": -2,
+    "dsp": 0
+  },
+  "timing_worst_ns": {
+    "Hold": 0.052,
+    "Minimum Pulse Width": 0.873,
+    "Recovery": 8.25,
+    "Removal": 1.175,
+    "Setup": 0.203
+  },
+  "corner_minima_ns": {
+    "Fast 1100mV 0C": {
+      "Hold": 0.052,
+      "Removal": 1.175,
+      "Setup": 3.082,
+      "Minimum Pulse Width": 0.873,
+      "Recovery": 13.679
+    },
+    "Fast 1100mV 85C": {
+      "Hold": 0.122,
+      "Removal": 1.362,
+      "Setup": 2.554,
+      "Minimum Pulse Width": 0.873,
+      "Recovery": 13.363
+    },
+    "Slow 1100mV 0C": {
+      "Hold": 0.262,
+      "Removal": 2.985,
+      "Setup": 0.203,
+      "Minimum Pulse Width": 0.873,
+      "Recovery": 8.397
+    },
+    "Slow 1100mV 85C": {
+      "Hold": 0.273,
+      "Removal": 3.197,
+      "Setup": 0.343,
+      "Minimum Pulse Width": 0.873,
+      "Recovery": 8.25
+    }
+  },
+  "supplemental_hold_minima_ns": {
+    "Slow 1100mV 85C Model A": 1.226,
+    "Slow 1100mV 85C Model B": 1.813,
+    "Slow 1100mV 0C Model A": 1.11,
+    "Slow 1100mV 0C Model B": 1.759,
+    "Fast 1100mV 85C Model A": 0.283,
+    "Fast 1100mV 85C Model B": 0.271,
+    "Fast 1100mV 0C Model A": 0.158,
+    "Fast 1100mV 0C Model B": 0.191
+  },
+  "coverage_proof": {
+    "status": "EXACT_PHYSICAL_REPLICA_LOGICAL_COVERAGE_PROOF",
+    "physical_input_path_counts": [
+      38,
+      38
+    ],
+    "derived_logical_input_path_counts": [
+      37,
+      37
+    ],
+    "baseline_input_path_counts": [
+      37,
+      37
+    ],
+    "output_path_counts": [
+      79,
+      79
+    ],
+    "added_tuple": [
+      "bridge_spiss",
+      "io_bridge_peripheral:ibs|rx_latch_idx.00~DUPLICATE",
+      "bridge_spiclk"
+    ],
+    "retained_parent": [
+      "bridge_spiss",
+      "io_bridge_peripheral:ibs|rx_latch_idx.00",
+      "bridge_spiclk"
+    ],
+    "fitter_row": [
+      "io_bridge_peripheral:ibs|rx_latch_idx.00",
+      "Duplicated",
+      "Router Logic Cell Insertion and Logic Duplication",
+      "Routability optimization",
+      "",
+      "",
+      "io_bridge_peripheral:ibs|rx_latch_idx.00~DUPLICATE",
+      "",
+      ""
+    ],
+    "unchanged_sources": [
+      "src/fpga/apf/apf.qip",
+      "src/fpga/apf/apf_constraints.sdc",
+      "src/fpga/apf/apf_top.v",
+      "src/fpga/apf/build_id.mif",
+      "src/fpga/apf/build_id_gen.tcl",
+      "src/fpga/apf/common.v",
+      "src/fpga/apf/io_bridge_peripheral.v",
+      "src/fpga/apf/io_pad_controller.v",
+      "src/fpga/apf/mf_datatable.qip",
+      "src/fpga/apf/mf_datatable.v",
+      "src/fpga/apf/mf_ddio_bidir_12.qip",
+      "src/fpga/apf/mf_ddio_bidir_12.v",
+      "src/fpga/core/core_constraints.sdc",
+      "src/fpga/rtl/FX68K/fx68k.sdc"
+    ],
+    "limitations": "Inherited unconstrained external IO remains unconstrained; no board IO timing qualification."
+  },
+  "limits": [
+    "One fixed recipe; hold only.002ns above.050ns guard.",
+    "Inherited externalIOunconstrained; notcompleteboardclosure.",
+    "No newPocket/gameplayclaim.",
+    "Firmwarebanksmustberegenerated; no generatedprivatepayloadpublished."
+  ]
+}

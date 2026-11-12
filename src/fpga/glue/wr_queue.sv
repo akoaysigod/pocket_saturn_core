@@ -93,7 +93,7 @@ module wr_queue #(
 	always_ff @(posedge clk) begin
 `ifdef FRESH_WRQ_LENRAM
 		if (push)       amem[ctail[CD-1:0]]        <= {5'd0, req_addr};
-		else if (merge) amem[ctail[CD-1:0] - 1'b1] <= {o_len + 5'd1, o_next[AW-1:5], o_lo};
+		else if (merge) amem[ctail[CD-1:0] - 1'b1] <= {o_len + 5'd1, req_addr[AW-1:5], o_lo};
 		head_q <= amem[chead_n[CD-1:0]];
 `else
 		if (push) amem[ctail[CD-1:0]] <= req_addr;
