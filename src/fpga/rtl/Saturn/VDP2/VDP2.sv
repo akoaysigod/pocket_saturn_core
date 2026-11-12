@@ -857,7 +857,7 @@ module VDP2 (
 		
 		if (!RST_N) begin
 			// synopsys translate_off
-			VA_PIPE <= '{4{'0}};
+			VA_PIPE <= '{default:VRAMAccessState_t'{default:'0}};
 			// synopsys translate_on
 		end
 		else if (DOT_CE_R) begin
@@ -2637,12 +2637,6 @@ module VDP2 (
 		
 		if (!RST_N) begin
 			// synopsys translate_off
-			NBG_CDL[0] <= '{8{'0}};
-			NBG_CDL[1] <= '{8{'0}};
-			NBG_CDL[2] <= '{8{'0}};
-			NBG_CDL[3] <= '{8{'0}};
-			RBG_CDL[0] <= '{8{'0}};
-			RBG_CDL[1] <= '{8{'0}};
 			// synopsys translate_on
 		end
 		else begin
@@ -3580,11 +3574,6 @@ module VDP2 (
 	
 		if (!RST_N) begin
 			// synopsys translate_off
-			R0DOT <= DD_NULL;
-			N0DOT <= DD_NULL;
-			N1DOT <= DD_NULL;
-			N2DOT <= DD_NULL;
-			N3DOT <= DD_NULL;
 			// synopsys translate_on
 		end
 		else if (DOT_CE_R || (DOT_CE_F & HRES[1])) begin
