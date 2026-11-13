@@ -12,10 +12,14 @@
 // the CE edges of the last VBLANK change and the last COMREG write (14 bits, the firmware polls more often than every
 // 4 ms), so its MCU sees them at the edge the real MCU would.
 //
-// Firmware words (FW_A; reads decode FW_A[1:0] only):
+// Firmware words (FW_A; reads decode FW_A[1:0], and FW_A[2] for word 5):
 //   R  0 TIME   {EXT_RTC[47:40], CE edges since RST_N [23:0]}
-//   R  1 EVT    {EXT_RTC[64], 0, COMREG writes (toggle), CE edge from which the last one is visible - 1 [13:0],
+//   R  1 EVT    {EXT_RTC[64], COMREG writes (count) [1:0], CE edge from which the last one is visible - 1 [13:0],
 //                IRQV_N, CE edge of the last IRQV_N change [13:0]}; read it before TIME (its edges are then <= TIME)
+//   R  5 COM2   {the last COMREG write's value, the one before's value, 00, CE edge from which the one before is
+//                visible - 1 [13:0]}: two writes between two looks of the firmware (WarCraft II: the BIOS's
+//                SYS_CHGSYSCK writes RESDISA 34 us after the game's INTBACK, without waiting for SF) are both seen,
+//                each with its own value (the MCU reads COMREG after its interrupt, at its own CE edge)
 //   R  2 INP    {IREG[FW_A[4:2]] (7 = COMREG), EXT_RTC[36:32], D3, R5, PIOB_I, PIOA_I}  (words 2, 6, .., 30)
 //   R  3 RTC    EXT_RTC[31:0]
 //   W 16 DPINS  {CDRES_N, D10..D4, D0} (D = D_O | ~D_D as SMPC.sv drives the pins; CDRES_N = R72)
@@ -106,8 +110,10 @@ module SMPC_FW
 
 	//for the firmware
 	bit  [23: 0] CE_CNT;
-	bit  [13: 0] VBL_TS,COM_TS;
-	bit          VBL_OLD,COM_TGL,COM_WR;
+	bit  [13: 0] VBL_TS,COM_TS,COM_TSP;
+	bit          VBL_OLD,COM_WR;
+	bit  [ 1: 0] COM_CNT;
+	bit  [ 7: 0] COM_WV,COM_V,COM_VP;                    // the value being written; the last write's; the one before's
 
 	wire FW_WR_DPIN = FW_WE && FW_A == 5'd16;
 	wire FW_WR_PA   = FW_WE && FW_A == 5'd17;
@@ -134,7 +140,7 @@ module SMPC_FW
 			{DDR1,DDR2} <= '0;
 			{IOSEL2,IOSEL1} <= '0;
 			{EXLE2,EXLE1} <= '0;
-			{COM_TGL,COM_WR} <= '0;
+			{COM_CNT,COM_WR} <= '0;
 		end
 		else if (!RESET_N) begin
 
@@ -150,7 +156,7 @@ module SMPC_FW
 			COM_WR <= 0;
 			if (!RW_N && RW_N_OLD && !CS_N) begin
 				case ({A,1'b1})
-					7'h1F: COM_WR <= 1;
+					7'h1F: begin COM_WR <= 1; COM_WV <= DBI; end
 					7'h63: SF <= 1;
 					7'h75: if (IOSEL1) PDR1_O <= DBI[6:0];
 					7'h77: if (IOSEL2) PDR2_O <= DBI[6:0];
@@ -163,8 +169,12 @@ module SMPC_FW
 				IO_BUF <= DBI;
 			end
 			// SMPC.sv: the COMREG write sets COMREG_PEND, which the MCU's next CE edge sees: the count of CE edges
-			// after the write clock is CE_CNT one clock later
-			if (COM_WR) begin COM_TGL <= ~COM_TGL; COM_TS <= CE_CNT[13:0]; end
+			// after the write clock is CE_CNT one clock later (the count, values and edges change in the same clock)
+			if (COM_WR) begin
+				COM_CNT <= COM_CNT + 2'd1;
+				COM_TS <= CE_CNT[13:0]; COM_TSP <= COM_TS;
+				COM_V <= COM_WV; COM_VP <= COM_V;
+			end
 
 			if (!CS_N && CS_N_OLD && RW_N) begin
 				if ({A,1'b1} >= 7'h21 && {A,1'b1} <= 7'h5F) begin
@@ -214,7 +224,7 @@ module SMPC_FW
 	always_comb begin
 		case (FW_A[1:0])
 			2'd0: RD = {EXT_RTC[47:40],CE_CNT};
-			2'd1: RD = {EXT_RTC[64],1'b0,COM_TGL,COM_TS,VBL_OLD,VBL_TS};
+			2'd1: RD = FW_A[2] ? {COM_V,COM_VP,2'b00,COM_TSP} : {EXT_RTC[64],COM_CNT,COM_TS,VBL_OLD,VBL_TS};
 			2'd2: RD = {IREG_Q,EXT_RTC[36:32],D3,R5,PIOB_I,PIOA_I};
 			default: RD = EXT_RTC[31:0];
 		endcase
