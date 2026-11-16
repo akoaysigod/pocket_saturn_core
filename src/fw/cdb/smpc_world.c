@@ -10,7 +10,8 @@
 
 #define SIO(w)      IO(0x80 + 4 * (w))
 #define S_TIME      SIO(0)       // {EXT_RTC[47:40], CE edges [23:0]}
-#define S_EVT       SIO(1)       // {RTC toggle, 0, COMREG toggle, COMREG edge - 1 [13:0], IRQV_N, its edge [13:0]}
+#define S_EVT       SIO(1)       // {RTC toggle, COMREG writes [1:0], COMREG edge - 1 [13:0], IRQV_N, its edge [13:0]}
+#define S_COM2      SIO(5)       // {last COMREG value, the one before's, 0 [15:14], the one before's edge - 1 [13:0]}
 #define S_INP(i)    SIO(2 + 4 * (i))   // {IREG[i], EXT_RTC[36:32], D3, R5, PIOB_I, PIOA_I}
 #define S_RTC       SIO(3)
 #define S_DPIN      SIO(16)      // {CDRES_N, D10..D4, D0}
@@ -31,8 +32,19 @@ enum { NVBL = 4 };
 static uint32_t vbl_e[NVBL]; static uint8_t vbl_v[NVBL]; static uint8_t vbl_n;
 static uint8_t vbl_seen_v;       // IRQV_N as last taken in
 // COMREG writes not taken by the program yet: the edge each is visible from, oldest first
-enum { NCOM = 2 };
-static uint32_t com_e[NCOM]; static uint8_t com_n, com_tgl;
+enum { NCOM = 3 };
+static uint32_t com_e[NCOM]; static uint8_t com_n, com_cnt;
+// COMREG's value by edge (the program reads it after its interrupt, at its own edge, which can be after the host's
+// next write in real time): the last NCV writes (edge from which visible, value), oldest first; com_v0 before them
+enum { NCV = 4 };
+static uint32_t cv_e[NCV]; static uint8_t cv_v[NCV], cv_n, com_v0;
+static void com_add(uint32_t ce, uint8_t v)
+{
+	if (com_n == NCOM) { for (int i = 1; i < NCOM; i++) com_e[i - 1] = com_e[i]; com_n--; }
+	com_e[com_n++] = ce;
+	if (cv_n == NCV) { com_v0 = cv_v[0]; for (int i = 1; i < NCV; i++) { cv_e[i - 1] = cv_e[i]; cv_v[i - 1] = cv_v[i]; } cv_n--; }
+	cv_e[cv_n] = ce; cv_v[cv_n] = v; cv_n++;
+}
 // IREG0 while the program is stopped in a loop that reads it (w_ireg_watch; INTBACK's continue / break wait): SMPC_FW.sv
 // reports no IREG write as an event, so the poll compares IREG0 itself while irw_on (cleared when the program runs)
 static uint8_t irw_on, irw_v;
@@ -72,7 +84,10 @@ static void rtc_default(void)
 static uint32_t last_ev;         // S_EVT as last taken in
 static void refresh(void)
 {
-	uint32_t ev = S_EVT;
+	uint32_t ev = S_EVT, c2 = 0;
+	// new COMREG writes: COM2 as of the same count (a write between the two reads: read both again)
+	if (((ev >> 29) & 3) != com_cnt)
+		for (;;) { c2 = S_COM2; uint32_t e2 = S_EVT; if (!(((e2 ^ ev) >> 29) & 3)) break; ev = e2; }
 	last_ev = ev;
 	uint32_t t24 = S_TIME & 0xFFFFFF;
 	now += (t24 - now24) & 0xFFFFFF;
@@ -89,13 +104,15 @@ static void refresh(void)
 		changed = true;
 		periph_dirty();
 	}
-	// COMREG: a new write (several since the last look are one: SMPC.sv's COMREG_PEND is one bit)
-	uint8_t ct = (ev >> 29) & 1;
-	if (ct != com_tgl) {
-		com_tgl = ct;
-		uint32_t ce = stamp((ev >> 15) & 0x3FFF) + 1;
-		if (com_n == NCOM) { com_e[0] = com_e[1]; com_n--; }
-		com_e[com_n++] = ce;
+	// COMREG: the writes since the last look, each at its own edge (the program's COMREG handshake merges them as
+	// SMPC.sv's one-bit COMREG_PEND does). SMPC_FW.sv keeps the last two: of three or more in one look, the older
+	// ones are lost (as one of two was with the one-bit toggle this replaces, and both when it flipped back)
+	uint8_t cc = (ev >> 29) & 3;
+	if (cc != com_cnt) {
+		unsigned n = (unsigned)(cc - com_cnt) & 3;
+		com_cnt = cc;
+		if (n >= 2) com_add(stamp(c2 & 0x3FFF) + 1, (uint8_t)(c2 >> 16));
+		com_add(stamp((ev >> 15) & 0x3FFF) + 1, (uint8_t)(c2 >> 24));
 		changed = true;
 		periph_dirty();
 	}
@@ -112,7 +129,7 @@ void smpc_init(void)
 	P.t0 = 0;
 	now = 0; now24 = 0;
 	vbl_n = 1; vbl_e[0] = 0; vbl_v[0] = 1; vbl_seen_v = 1;   // SMPC_FW after RST_N: IRQV_N 1 (from edge 0)
-	com_n = 0; com_tgl = 0;
+	com_n = 0; com_cnt = 0; cv_n = 0; com_v0 = 0;
 	irw_on = 0;
 	d_pins = 0xFFFF; cdres = 0;
 	for (int i = 0; i < 8; i++) { r_o[i] = 0; r_dcr[i] = 0; }
@@ -236,7 +253,14 @@ uint32_t w_comreg_next(void) { return com_n ? com_e[0] : 0; }
 uint8_t w_d3(uint32_t t) { (void)t; return (S_INP(0) >> 18) & 1; }
 uint8_t w_pio(int port, uint32_t t) { (void)t; uint32_t in = S_INP(0); return (uint8_t)((port ? in >> 7 : in) & 0x7F); }
 uint8_t w_area(void) { return (S_INP(0) >> 14) & 15; }
-uint8_t w_ireg(int i, uint32_t t) { (void)t; return (uint8_t)(S_INP(i & 7) >> 24); }
+uint8_t w_ireg(int i, uint32_t t)
+{
+	if ((i & 7) == 7) {                          // COMREG: its value at the edge t (every write up to now is known)
+		for (int k = cv_n - 1; k >= 0; k--) if (!wt_lt(t, cv_e[k])) return cv_v[k];
+		return com_v0;
+	}
+	return (uint8_t)(S_INP(i & 7) >> 24);
+}
 void w_ireg_watch(uint8_t v) { irw_on = 1; irw_v = v; }
 uint8_t w_rtc_init(int i) { return rtc_nib[i & 15]; }
 
