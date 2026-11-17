@@ -56,6 +56,13 @@ module fb_queue #(
 `ifdef FRESH_FBRDY
 	output logic          full_n,      // (FRESH_FBRDY) the value full takes at the next edge (BWC only)
 `endif
+`ifdef FRESH_T_FBBEQ
+	// (FRESH_T_FBBEQ, work/fresh/tm, 2026-11-09; timing, exact) the open commands' blocks out, the request's block
+	// compares in: vdp1fb_ext compares each candidate address with them before its address select and hands the
+	// selected results over (= req_addr[AW-1:5] == oblk[k] in every clk), so the compare is no longer behind the mux
+	output logic [AW-6:0] o_blk [2],
+	input  logic    [1:0] req_beq,
+`endif
 	// memory side
 	output logic          m_valid,
 	input  logic          m_ready,
@@ -114,6 +121,9 @@ module fb_queue #(
 	assign rsp_tag   = ftag;
 
 	generate if (!BWC) begin : g_run
+`ifdef FRESH_T_FBBEQ
+	assign o_blk = '{default: '0};   // (FRESH_T_FBBEQ) BWC only
+`endif
 	// command FIFO
 	logic [CMW-1:0] cmem [CN];
 	logic [CD:0] chead, ctail, ccnt;   // ctail: next free slot; the open command (if any) is ctail - 1
@@ -255,9 +265,16 @@ module fb_queue #(
 	wire [4:0]    roff = raddr[4:0];
 	wire [BW-1:0] rblk = raddr[AW-1:5];
 	always_ff @(posedge clk) begin
+`ifdef FRESH_T_FBBEQ
+		beq <= req_beq;
+`else
 		for (int k = 0; k < 2; k++) beq[k] <= req_addr[AW-1:5] == oblk[k];
+`endif
 		beq_stale <= rv;
 	end
+`ifdef FRESH_T_FBBEQ
+	assign o_blk = oblk;
+`endif
 	// (A2, timing, exact) m_ready (the memory's ready: decoded from its state registers, a late input) comes last: the
 	// hit is formed for m_ready = 0 (h0) and m_ready = 1 (h1) in parallel, and so are the command slot write (cw_a /
 	// cw_d below); m_ready picks (the same values as before for either value of m_ready)
@@ -289,11 +306,25 @@ module fb_queue #(
 `ifdef FRESH_FBRDY
 	// (FRESH_FBRDY, work/fresh/glue, 2026-11-04) full one clk ahead, from the next values of its terms (the always block
 	// below: ccnt, dp_fly, clr_v, swp; rst sets swp), so that vdp1fb_ext can keep FB_RDY in a register (timing)
-	wire [CD:0] ccnt_n  = ccnt + (CD+1)'(cpush) - (CD+1)'(take);
-	wire        dpfly_n = take_w ? 1'b1 : (m_wd_pop && dp_left == 5'd0) ? 1'b0 : dp_fly;
 	wire        clrv_n  = m_wd_pop ? 1'b1 : (pa_clr && !swp) ? 1'b0 : clr_v;
 	wire        swp_n   = swp && !(!pa_req && &swp_a);
+`ifdef FRESH_T_FBFULL
+	// (FRESH_T_FBFULL, work/fresh/tm, 2026-11-09; timing, exact) the same full_n formed for the four values of
+	// (cpush, take) in parallel and picked by them last: cpush (behind the merge hit, which compares the open commands'
+	// slots with chead) and take no longer drive the counter adder and the compare (the path chead -> hit -> cpush ->
+	// ccnt_n -> full_n -> vdp1fb_ext rdy_r failed on seed 9 of the prefetch sweep)
+	wire        dpf0 = (m_wd_pop && dp_left == 5'd0) ? 1'b0 : dp_fly;   // dpfly_n with take = 0
+	wire        dpf1 = hq_we ? 1'b1 : dpf0;                             // ... with take = 1 (take_w = take && hq_we)
+	wire        f00 = (ccnt                + (CD+1)'(dpf0 || clrv_n)) >= (CD+1)'(CN - 2);
+	wire        f10 = (ccnt + (CD+1)'(1)   + (CD+1)'(dpf0 || clrv_n)) >= (CD+1)'(CN - 2);
+	wire        f01 = (ccnt - (CD+1)'(1)   + (CD+1)'(dpf1 || clrv_n)) >= (CD+1)'(CN - 2);
+	wire        f11 = (ccnt                + (CD+1)'(dpf1 || clrv_n)) >= (CD+1)'(CN - 2);
+	assign full_n = rst || swp_n || (cpush ? (take ? f11 : f10) : (take ? f01 : f00));
+`else
+	wire [CD:0] ccnt_n  = ccnt + (CD+1)'(cpush) - (CD+1)'(take);
+	wire        dpfly_n = take_w ? 1'b1 : (m_wd_pop && dp_left == 5'd0) ? 1'b0 : dp_fly;
 	assign full_n = rst || (ccnt_n + (CD+1)'(dpfly_n || clrv_n) >= (CD+1)'(CN - 2)) || swp_n;
+`endif
 `endif
 	assign empty     = ccnt == '0 && !rinfl && !dp_fly && !clr_v && !swp && !rv;
 	assign cmd_count = ccnt + (CD+1)'(rv);

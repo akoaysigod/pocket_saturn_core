@@ -242,6 +242,21 @@ module vdp1fb_ext #(
 	logic        q_dsel [2];
 	always_ff @(posedge clk_ram) for (int m = 0; m < 2; m++) q_dsel[m] <= (d_we || d_rd) && mdraw == m;
 `endif
+`ifdef FRESH_T_FBBEQ
+	// (FRESH_T_FBBEQ, work/fresh/tm, 2026-11-09; timing, exact) the queues' block compares before the address select: each
+	// candidate block (the draw access's, the erase write's, the prefetch burst's: q_addr[m][16:5] below) is compared with
+	// the queue's two open blocks in parallel and the request select picks, so fb_queue's beq is the same value as its
+	// own compare of req_addr, one mux level after the select instead of a 12-bit compare
+	logic [11:0] q_oblk [2][2];
+	logic  [1:0] q_beq  [2];
+	always_comb for (int m = 0; m < 2; m++) for (int k = 0; k < 2; k++) begin
+		logic ed, ee, ep;
+		ed = c_fbd_a[17:6] == q_oblk[m][k];
+		ee = c_fbv_a[17:6] == q_oblk[m][k];
+		ep = {hl_line[pf_sel], fl_blk[pf_sel]} == q_oblk[m][k];
+		q_beq[m][k] = ((d_we || d_rd) && mdraw == m) ? ed : (e_we && !mdraw == m) ? ee : ep;
+	end
+`endif
 	always_comb begin
 		for (int m = 0; m < 2; m++) begin
 			q_valid[m] = 1'b0; q_we[m] = 1'b0; q_addr[m] = '0; q_len[m] = '0; q_data[m] = '0; q_be[m] = '0; q_tag[m] = '0;
@@ -351,6 +366,9 @@ module vdp1fb_ext #(
 		// SRAM keeps up with them)
 		fb_queue #(.AW(17), .TW(TW), .BM((m == 1 || FB0_PS) && !PS_BWC), .BWC((m == 1 || FB0_PS) && PS_BWC)) queue (
 			.clk(clk_ram), .rst(q_rst),   // (A7: q_rst)
+`ifdef FRESH_T_FBBEQ
+			.o_blk(q_oblk[m]), .req_beq(q_beq[m]),
+`endif
 			.req_valid(q_valid[m]), .req_we(q_we[m]), .req_addr(q_addr[m]), .req_len(q_len[m]), .req_data(q_data[m]),
 `ifdef A6_DBG
 			.req_nm(q_nm[m]),
@@ -424,6 +442,9 @@ module vdp1fb_ext #(
 `endif
 	psram_phy #(.LC(PS_LC), .INIT_CYC(PS_INIT)) psram (
 		.clk(clk_ram), .rst(rst),
+`ifdef FRESH_T_PHYFIN
+		.rd_fin(),
+`endif
 `ifdef A7_FIX
 		// (A7) the clear's command and data while clr_on, else A6's (the queues are held in reset meanwhile: p_valid = 0)
 		.cmd_valid(clr_on ? clr_go : p_valid), .cmd_ready(p_ready), .cmd_we(clr_on || (psel ? m_we[1] : m_we[0])),
@@ -496,6 +517,9 @@ module vdp1fb_ext #(
 
 	psram_phy #(.LC(PS_LC), .INIT_CYC(PS_INIT)) psram (
 		.clk(clk_ram), .rst(rst),
+`ifdef FRESH_T_PHYFIN
+		.rd_fin(),
+`endif
 		.cmd_valid(m_valid[1]), .cmd_ready(m_ready[1]), .cmd_we(m_we[1]), .cmd_addr({6'd0, m_addr[1]}), .cmd_len(m_len[1]),
 		.wd_pop(m_pop[1]), .wd_data(m_wd[1]), .wd_be(m_wbe[1]),
 		.rd_valid(m_rv[1]), .rd_data(m_rd[1]), .rd_last(m_rl[1]), .cfg_done(ready),

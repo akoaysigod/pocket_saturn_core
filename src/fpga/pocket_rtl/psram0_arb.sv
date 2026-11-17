@@ -1,3 +1,20 @@
+// FRESH_T_* (work/fresh/tm, 2026-11-09): timing items on the fitted build's near-critical paths, each exact (the same
+// values at every clk at the module's ports, by construction; checked on the RAM-H cache unit bench and the whole-system
+// bench), each behind its own macro:
+//   FRESH_T_WQPRE  the captured write's "outside the first 4 KB" compare (rw_onchip) and the "new write outside the first
+//                  4 KB" condition (wq_off = ramh_wq && !rw_onchip) as registers loaded from the inputs the capture
+//                  registers load from (ramh_addr, ramh_wr, rw_wr): the compare leaves the paths rw_addr -> u0 -> tag RAM
+//                  port B address (the worst clk_ram path of the prefetch fit, slack +0.030 ns at seed 6) and
+//                  rw_addr -> write queue request -> queue RAM data.
+//   FRESH_T_LKCMP  the lookup's tag compares before the fill-register select (the RAM entry's and the fill registers'
+//                  tags are compared with lk_tag in parallel; lk_ov picks): two LUT levels off f_set -> k_hit.
+//   FRESH_T_PHYFIN the PHY's "last read word now" (rd_valid && rd_last) as a PHY register rd_fin (its next value is
+//                  take && rlast_r): one level off the paths into the write queues' pushes (issue_ok).
+//   FRESH_T_RHBUSY ramh_busy as one register loaded with the value rq_full || rhc_busy takes at the next edge (the
+//                  queue's full_n, FRESH_VBUSY, and the next values of rhc_busy's seven terms as the state block writes
+//                  them): the SCU / SH-2 see a plain register through the MEM_WAIT_N mux instead of a 7-input OR behind
+//                  lk_v / mp_pend / k_v (the clk_ram -> clk_sys paths that fail on seeds 11-13). Needs FRESH_VBUSY.
+//                  FRESH_TCHK (bench only) compares the register with the combinational value every clk.
 // A8 (work/a8, 2026-11-03), only with `define A8_RHC: a RAM-H cache in block RAM in place of the 2-line buffer (section
 // "(A8) RAM-H cache" below); without the macro the file is A7d's. A8_RHC_SW (bench only) keeps both and switches at
 // run time (rhc_on). A8_RHC_SL = log2 of the sets (default 6: 4 KB); A8_RHC_NOPF = no next-line prefetch.
@@ -181,7 +198,17 @@ module psram0_arb #(
 		rw_addr <= ramh_addr; rw_d <= ramh_din; rw_dz <= ramh_dz; rw_wr <= ramh_wr;
 	end
 	wire [31:0] rw_din = {rw_d[31:21], rw_d[20] | (rw_dz && rw_d == 32'h5A015E01), rw_d[19:0]};
+`ifdef FRESH_T_WQPRE
+	// (FRESH_T_WQPRE; exact) rw_onchip's and wq_off's next values from the capture registers' inputs: rw_addr's next
+	// value is ramh_addr, rw_wr's is ramh_wr, ramh_wr_o's is |rw_wr
+	logic rw_onchip, wq_off;
+	always_ff @(posedge clk) begin
+		rw_onchip <= ramh_addr[19:12] == 8'd0;
+		wq_off    <= |ramh_wr && !(|rw_wr) && ramh_addr[19:12] != 8'd0;
+	end
+`else
 	wire  rw_onchip = rw_addr[19:12] == 8'd0;
+`endif
 	logic ramh_rd_o, ramh_wr_o, cd_rd_o, cd_wr_o, rl_rd_o, rl_wr_o, v_rd_o, v_wr_o, ct_rd_o, ct_wr_o, bi_wr_o, bs_rd_o, bs_wr_o;
 	always_ff @(posedge clk) begin
 		{ramh_rd_o, ramh_wr_o} <= {ramh_rd, |rw_wr};
@@ -193,6 +220,9 @@ module psram0_arb #(
 		{bs_rd_o, bs_wr_o} <= {bsram_rd, |bsram_wr};
 	end
 	wire ramh_rq = ramh_rd && !ramh_rd_o, ramh_wq = |rw_wr && !ramh_wr_o;   // (A2: ramh_wq on the captured write)
+`ifndef FRESH_T_WQPRE
+	wire wq_off = ramh_wq && !rw_onchip;   // a new write outside the first 4 KB (FRESH_T_WQPRE: a register, above)
+`endif
 	wire cd_rq = cdram_rd && !cd_rd_o, cd_wq = |cdram_wr && !cd_wr_o;
 	wire rl_rq = raml_rd && !rl_rd_o, rl_wq = |raml_wr && !rl_wr_o;
 	wire v_rq = vdp1vram_rd && !v_rd_o, v_wq = |vdp1vram_wr && !v_wr_o;
@@ -262,14 +292,16 @@ module psram0_arb #(
 	logic  [4:0] rq_len;
 	logic [15:0] rq_wd;
 	logic  [1:0] rq_wbe;
-	wire         rh_push_hi = ramh_wq && !rw_onchip && |rw_wr[3:2];                        // (A2: rw_*)
-	wire         rh_push_lo = (ramh_wq && !rw_onchip && !(|rw_wr[3:2])) || rh_lo_pend;
+	wire         rh_push_hi = wq_off && |rw_wr[3:2];                                       // (A2: rw_*)
+	wire         rh_push_lo = (wq_off && !(|rw_wr[3:2])) || rh_lo_pend;
 	wr_queue #(.AW(19), .CD(3), .DD(5)) rq (
 		.clk(clk), .rst(rst),
 		.req_valid(rh_push_hi || rh_push_lo), .req_addr({rw_addr, rh_lo_pend || !(|rw_wr[3:2])}),   // (A2) [0]: = !rh_push_hi when valid
 		.req_data(rh_push_hi ? rw_din[31:16] : rw_din[15:0]), .req_be(rh_push_hi ? rw_wr[3:2] : rw_wr[1:0]),
 		.full(rq_full), .empty(rq_empty),
-`ifdef FRESH_VBUSY
+`ifdef FRESH_T_RHBUSY
+		.full_n(rq_full_n),
+`elsif FRESH_VBUSY
 		.full_n(),
 `endif
 		.m_valid(rq_valid), .m_ready(cmd_ready && issue_ok && sel == C_RAMH_W), .m_addr(rq_addr), .m_len(rq_len),
@@ -277,7 +309,12 @@ module psram0_arb #(
 	);
 `ifdef A8_RHC
 	logic rhc_busy;                  // (A8)
+`ifdef FRESH_T_RHBUSY
+	logic rq_full_n, ramh_busy_r;    // (FRESH_T_RHBUSY) the queue's full one clk ahead; the register (below)
+	assign ramh_busy = rhc_on ? ramh_busy_r : rq_full || rh_pend || (rh_wait && !rh_hv[rh_want_w][rh_want_h]);
+`else
 	assign ramh_busy = rq_full || (rhc_on ? rhc_busy : rh_pend || (rh_wait && !rh_hv[rh_want_w][rh_want_h]));
+`endif
 `else
 	assign ramh_busy = rq_full || rh_pend || (rh_wait && !rh_hv[rh_want_w][rh_want_h]);
 `endif
@@ -506,7 +543,12 @@ module psram0_arb #(
 	assign sel   = gsel;
 	// (A2) not the line client whose read ends in this clk (fin; its done pulse is one clk later): VDP1 VRAM chunks
 	// (each issue takes the next chunk) and RAM-H fills (rh_issued) need no such guard
+`ifdef FRESH_T_PHYFIN
+	logic  rd_fin;                   // (FRESH_T_PHYFIN) = rd_valid && rd_last, a PHY register
+	wire   fin   = rd_fin;
+`else
 	wire   fin   = rd_valid && rd_last;
+`endif
 	assign sel_v = gsel_v && still && !(fin && gsel == cur && gsel != C_V_R);
 	always_comb begin
 		sel_we = 1'b1; sel_addr = '0; sel_len = '0;
@@ -629,7 +671,13 @@ module psram0_arb #(
 	wire           lk_ov    = f_has && lk_set == f_set;
 	wire [TW+1:0]  le0      = (lk_ov && !f_way) ? {f_tag, fv_now} : ta0;
 	wire [TW+1:0]  le1      = (lk_ov &&  f_way) ? {f_tag, fv_now} : ta1;
+`ifdef FRESH_T_LKCMP
+	// (FRESH_T_LKCMP; exact) the compares before the select: = le0[TW+1:2] == lk_tag, le1[TW+1:2] == lk_tag
+	wire           lmf      = f_tag == lk_tag, lma0 = ta0[TW+1:2] == lk_tag, lma1 = ta1[TW+1:2] == lk_tag;
+	wire           lm0      = (lk_ov && !f_way) ? lmf : lma0, lm1 = (lk_ov && f_way) ? lmf : lma1;
+`else
 	wire           lm0      = le0[TW+1:2] == lk_tag, lm1 = le1[TW+1:2] == lk_tag;
+`endif
 	wire  [1:0]    lv0      = le0[1:0], lv1 = le1[1:0];
 	wire           lh0      = lm0 && lv0[lk_half], lh1 = lm1 && lv1[lk_half];
 	wire           le0_free = le0[1:0] == 2'b00 && !(lk_ov && !f_way && f_act);   // holds no line, not being filled
@@ -686,7 +734,7 @@ module psram0_arb #(
 
 	// writes: u1_* = the last write (loaded at its U0, held through its U2); u1_ov (made in U0: no set-up runs then,
 	// u0 has tag port B) = its set's entry of way f_way is the fill registers'; u1_upd: U2 writes it (way u2_way)
-	wire           u0 = rhc_on && ramh_wq && !rw_onchip && !sweep;
+	wire           u0 = rhc_on && wq_off && !sweep;
 	logic          u1, u1_ov, u2, u2_way;
 	logic [19:2]   u1_a;
 	logic [31:0]   u1_d;
@@ -720,6 +768,35 @@ module psram0_arb #(
 	end
 
 	assign rhc_busy = sweep || sw_end || rl_req || (lk_v && !lk_fast) || k_v || mp_pend || mp_wait;
+`ifdef FRESH_T_RHBUSY
+	// (FRESH_T_RHBUSY; exact) ramh_busy_r = the value rq_full || rhc_busy takes at the next edge: the queue's full_n and
+	// the next values of the seven terms, exactly as the state block below writes them (its defaults, the rst / flush
+	// branch, and the order of its assignments: for mp_pend the LK2 miss then pb_su; for mp_wait the mark, the fill end,
+	// LK2's coming case, then pb_su; rl_req is set by the fill end and by LK2's coming case)
+	wire rb_rf      = rst || flush;
+	wire rb_sweep   = rb_rf || (sweep && !(&sw_a));
+	wire rb_swend   = !rb_rf && sweep && (&sw_a);
+	wire rb_mkh     = mk_now && !f_kill && mp_half == mk_h;              // the mark is the waiter's half
+	wire rb_fend    = rh_done && rhc_on && f_act;                        // the fill's last word is in
+	wire rb_rlreq   = !rb_rf && ((rb_fend && mp_wait && !rb_mkh) ||
+	                             (k_v && !k_hit && k_coming && !(mk_now && !f_kill && mk_h == k_half) && rh_done && f_act));
+	wire rb_lk      = c_req && !sweep && !rst && !flush && !c_fast;      // lk_v && !lk_fast
+	wire rb_kv      = lk_v && !lk_fast && !rst && !flush;
+	wire rb_mppend  = !rb_rf && !pb_su && ((k_v && !k_hit && !k_coming) || mp_pend);
+	wire rb_mpclr   = rb_mkh || (rb_fend && !rb_mkh);                    // the two clears (each only while mp_wait)
+	wire rb_mpset   = pb_su || (k_v && !k_hit && k_coming && !(mk_now && !f_kill && mk_h == k_half) && !(rh_done && f_act));
+	wire rb_mpwait  = !rb_rf && (rb_mpset || (mp_wait && !rb_mpclr));
+	wire rhc_busy_n = rb_sweep || rb_swend || rb_rlreq || rb_lk || rb_kv || rb_mppend || rb_mpwait;
+	always_ff @(posedge clk) ramh_busy_r <= rq_full_n || rhc_busy_n;
+`ifdef FRESH_TCHK
+	// (bench) the register against the combinational value, from the first reset on
+	logic rb_chk = 1'b0;
+	always_ff @(posedge clk) begin
+		if (rst) rb_chk <= 1'b1;
+		if (rb_chk && ramh_busy_r != (rq_full || rhc_busy)) $error("FRESH_T_RHBUSY: ramh_busy_r %b, rq_full || rhc_busy %b", ramh_busy_r, rq_full || rhc_busy);
+	end
+`endif
+`endif
 
 	always_ff @(posedge clk) begin
 		lru_we <= 1'b0; mk_now <= 1'b0; sw_end <= 1'b0; rl_req <= 1'b0;
@@ -902,7 +979,7 @@ module psram0_arb #(
 				end
 			end
 			rh_lo_pend <= rh_push_hi && |rw_wr[1:0];
-			if (ramh_wq && !rw_onchip) begin
+			if (wq_off) begin
 				// a write drops the line from the cache, and spoils a fill of it that is running (A2: captured write)
 				if (rh_tag[0] == rw_addr[19:5]) rh_hv[0] <= 2'b00;
 				if (rh_tag[1] == rw_addr[19:5]) rh_hv[1] <= 2'b00;
@@ -978,6 +1055,9 @@ module psram0_arb #(
 		.cmd_valid(cmd_valid), .cmd_ready(cmd_ready), .cmd_we(sel_we), .cmd_addr(sel_addr), .cmd_len(sel_len),
 		.wd_pop(wd_pop), .wd_data(wd_data), .wd_be(wd_be),
 		.rd_valid(rd_valid), .rd_data(rd_data), .rd_last(rd_last), .cfg_done(ready),
+`ifdef FRESH_T_PHYFIN
+		.rd_fin(rd_fin),
+`endif
 `ifdef A6_DBG
 		.gap2(1'b0), .dbg_rw(dbg_rw0), .dbg_ww(dbg_ww0),
 `endif
