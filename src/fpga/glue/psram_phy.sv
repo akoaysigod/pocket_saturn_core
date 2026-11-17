@@ -110,6 +110,9 @@ module psram_phy #(
 	output logic        rd_valid,
 	output logic [15:0] rd_data,
 	output logic        rd_last,
+`ifdef FRESH_T_PHYFIN
+	output logic        rd_fin,        // (FRESH_T_PHYFIN) = rd_valid && rd_last, registered
+`endif
 	output logic        cfg_done,
 `ifdef A6_DBG
 	input  logic        gap2,          // (A6) 1: CE# high two PSRAM cycles between accesses
@@ -230,6 +233,9 @@ module psram_phy #(
 	always_ff @(posedge clk) begin
 		rd_valid <= 1'b0;
 		rd_last  <= 1'b0;
+`ifdef FRESH_T_PHYFIN
+		rd_fin   <= take && rlast_r;   // (FRESH_T_PHYFIN) = the next rd_valid && rd_last
+`endif
 		if (take) begin
 			rd_valid <= 1'b1;
 			rd_data  <= dq_s;

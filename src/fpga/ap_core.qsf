@@ -831,6 +831,13 @@ set_global_assignment -name VERILOG_MACRO "FRESH_VCM_UADDR2=1"
 set_global_assignment -name VERILOG_MACRO "FRESH_VCM_UROM2=1"
 set_global_assignment -name VERILOG_MACRO "FRESH_SH2_REGM10K=1"
 set_global_assignment -name VERILOG_MACRO "FRESH_SH2_TAGPACK=1"
+# fresh/tm (2026-11-09): timing items, exact (work/fresh/REPORT.txt section 9)
+set_global_assignment -name VERILOG_MACRO "FRESH_T_WQPRE=1"
+set_global_assignment -name VERILOG_MACRO "FRESH_T_LKCMP=1"
+set_global_assignment -name VERILOG_MACRO "FRESH_T_PHYFIN=1"
+set_global_assignment -name VERILOG_MACRO "FRESH_T_RHBUSY=1"
+set_global_assignment -name VERILOG_MACRO "FRESH_T_FBFULL=1"
+set_global_assignment -name VERILOG_MACRO "FRESH_T_FBBEQ=1"
 # I/O cell registers for the memory buses (glue/REPORT 10: PSRAM / SRAM outputs are plain registers in psram_phy /
 # fb_sram; read data are sampled every clk_ram by psram_phy (dq_s) and on fb_sram's third clk)
 set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to cram0_a[*]
@@ -866,4 +873,4 @@ set_instance_assignment -name FAST_OUTPUT_REGISTER ON -to sram_lb_n
 set_instance_assignment -name FAST_OUTPUT_ENABLE_REGISTER ON -to sram_dq[*]
 set_instance_assignment -name FAST_INPUT_REGISTER ON -to sram_dq[*]
 # (the build script appends NUM_PARALLEL_PROCESSORS and SEED)
-set_global_assignment -name SEED 10
+set_global_assignment -name SEED 9
